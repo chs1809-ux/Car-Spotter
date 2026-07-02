@@ -263,7 +263,14 @@
   (function initSetup() {
     var key = safeGet(KEY_STORE);
     var model = safeGet(MODEL_STORE);
-    if (model) modelSel.value = model;
+    if (model) {
+      var validOption = Array.prototype.some.call(modelSel.options, function (o) { return o.value === model; });
+      if (validOption) {
+        modelSel.value = model;
+      } else {
+        safeSet(MODEL_STORE, modelSel.value); // fall back to default, overwrite stale saved value
+      }
+    }
     if (key) {
       apiKeyInput.value = key;
       enterApp();
