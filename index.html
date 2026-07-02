@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Car Spotter</title>
+<style>
+  :root {
+    --bg: #0e0f12;
+    --card: #17181c;
+    --accent: #4a90e2;
+    --ok: #3ecf7e;
+    --bad: #e05a5a;
+    --warn: #e0b23e;
+    --text: #f2f2f2;
+    --muted: #a7a9ad;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.4;
+    padding-bottom: 40px;
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 1.6rem; margin: 4px 0 2px; }
+  .tagline { color: var(--muted); margin: 0 0 20px; }
+  h2 { font-size: 1.1rem; margin: 0 0 4px; }
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  label { display: block; margin: 14px 0 6px; font-weight: 600; }
+  input[type=text], input[type=password], textarea, select {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+    border-radius: 10px;
+    border: 1px solid #33343a;
+    background: #0e0f12;
+    color: var(--text);
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  input[type=file] { width: 100%; padding: 10px 0; color: var(--text); }
+  button {
+    font: inherit;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 18px;
+    cursor: pointer;
+  }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    width: 100%;
+    font-size: 1.1rem;
+    min-height: 60px;
+    margin-top: 14px;
+  }
+  button.secondary {
+    background: #24262c;
+    color: var(--text);
+    width: 100%;
+    min-height: 54px;
+    margin-top: 10px;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.live-on { background: var(--ok); color: #06210f; }
+  .segmented { display: flex; gap: 8px; margin-top: 8px; }
+  .segmented button {
+    flex: 1;
+    background: #0e0f12;
+    border: 1px solid #33343a;
+    min-height: 52px;
+  }
+  .segmented button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .hint { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+  video { width: 100%; border-radius: var(--radius); background: #000; margin-top: 14px; aspect-ratio: 4/3; object-fit: cover; }
+  #result { font-size: 1.15rem; font-weight: 700; margin-top: 14px; min-height: 1.4em; }
+  #result.match { color: var(--ok); }
+  #result.mismatch { color: var(--bad); }
+  #result.uncertain { color: var(--warn); }
+  #result.error { color: var(--bad); }
+  #status { color: var(--muted); margin-top: 6px; min-height: 1.2em; }
+  #parsedEcho { margin-top: 10px; font-weight: 600; }
+  [hidden] { display: none !important; }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .row { display: flex; gap: 10px; margin-top: 10px; }
+  .row > button { flex: 1; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Car Spotter</h1>
+  <p class="tagline">Identify a private-hire car, or confirm it's the one you booked.</p>
+
+  <!-- SETUP -->
+  <section id="setup" class="card" aria-labelledby="setup-h">
+    <h2 id="setup-h">Set up</h2>
+    <label for="apiKey">Anthropic API key</label>
+    <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
+    <label for="modelSel">Model</label>
+    <select id="modelSel">
+      <option value="claude-sonnet-4-6">Sonnet 4.6 (more accurate)</option>
+      <option value="claude-haiku-4-5-20251001">Haiku 4.5 (faster, cheaper — good for Live mode)</option>
+    </select>
+    <button id="saveKey" class="primary">Save and continue</button>
+    <p class="hint">Your key stays in this browser on this device and is only sent to Anthropic's API when you scan or parse. It is never stored in the file itself.</p>
+  </section>
+
+  <!-- MODE SELECT -->
+  <section id="modeSection" class="card" hidden aria-labelledby="mode-h">
+    <h2 id="mode-h">What do you need?</h2>
+    <div class="segmented" role="group" aria-label="Choose mode">
+      <button id="modeConfirm" aria-pressed="true">Confirm my ride</button>
+      <button id="modeOpen" aria-pressed="false">Identify a car</button>
+    </div>
+  </section>
+
+  <!-- MODE A: INTAKE -->
+  <section id="intakeSection" class="card" hidden aria-labelledby="intake-h">
+    <h2 id="intake-h">Your ride details</h2>
+    <p class="hint">Type or dictate a description, or upload a screenshot of your booking screen. Only the vehicle details are kept; the image is discarded after reading.</p>
+
+    <label for="rideText">Describe the car (optional if uploading a screenshot)</label>
+    <textarea id="rideText" placeholder="e.g. black Toyota Camry, plate SKX1234A, Grab"></textarea>
+
+    <label for="rideShot">Or upload a screenshot of your booking</label>
+    <input type="file" id="rideShot" accept="image/*">
+
+    <button id="parseRide" class="primary">Get ride details</button>
+
+    <div id="parsedEcho" role="status" aria-live="assertive" aria-atomic="true"></div>
+    <div class="row" id="confirmRow" hidden>
+      <button id="confirmRide" class="primary" style="margin-top:0;">Confirm, this is correct</button>
+      <button id="editRide" class="secondary" style="margin-top:0;">Try again</button>
+    </div>
+  </section>
+
+  <!-- SCAN -->
+  <section id="scanSection" class="card" hidden aria-labelledby="scan-h">
+    <h2 id="scan-h">Scan</h2>
+    <div id="expectedSummary" class="hint"></div>
+
+    <button id="startCam" class="primary">Start camera</button>
+    <video id="video" playsinline autoplay muted aria-hidden="true"></video>
+
+    <div class="row">
+      <button id="identifyBtn" class="secondary" disabled style="margin-top:0;">Identify</button>
+      <button id="liveBtn" class="secondary" disabled style="margin-top:0;">Start Live mode</button>
+    </div>
+
+    <!-- Region A: assertive, key results only -->
+    <div id="result" role="status" aria-live="assertive" aria-atomic="true"></div>
+    <!-- Region B: polite, status/detail/errors -->
+    <div id="status" role="status" aria-live="polite" aria-atomic="true"></div>
+  </section>
+
+  <button id="changeKey" class="secondary" hidden style="margin-top:20px;">Change key or model</button>
+</main>
+
+<canvas id="canvas" style="display:none;"></canvas>
+
+<script>
+(function () {
+  "use strict";
+
+  var KEY_STORE = "carspotter_key";
+  var MODEL_STORE = "carspotter_model";
+
+  function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  var setup = document.getElementById("setup");
+  var modeSection = document.getElementById("modeSection");
+  var intakeSection = document.getElementById("intakeSection");
+  var scanSection = document.getElementById("scanSection");
+  var changeKey = document.getElementById("changeKey");
+
+  var apiKeyInput = document.getElementById("apiKey");
+  var modelSel = document.getElementById("modelSel");
+  var saveKey = document.getElementById("saveKey");
+
+  var modeConfirmBtn = document.getElementById("modeConfirm");
+  var modeOpenBtn = document.getElementById("modeOpen");
+
+  var rideText = document.getElementById("rideText");
+  var rideShot = document.getElementById("rideShot");
+  var parseRide = document.getElementById("parseRide");
+  var parsedEcho = document.getElementById("parsedEcho");
+  var confirmRow = document.getElementById("confirmRow");
+  var confirmRideBtn = document.getElementById("confirmRide");
+  var editRideBtn = document.getElementById("editRide");
+
+  var expectedSummary = document.getElementById("expectedSummary");
+  var startCam = document.getElementById("startCam");
+  var video = document.getElementById("video");
+  var canvas = document.getElementById("canvas");
+  var identifyBtn = document.getElementById("identifyBtn");
+  var liveBtn = document.getElementById("liveBtn");
+  var resultEl = document.getElementById("result");
+  var statusEl = document.getElementById("status");
+
+  var mode = "confirm"; // "confirm" | "open"
+  var expected = null; // {plate, colour, brand, model}
+  var stream = null;
+  var busy = false;
+  var liveTimer = null;
+  var LIVE_INTERVAL_MS = 4500;
+
+  function showResult(text, cls) {
+    resultEl.className = cls || "";
+    resultEl.textContent = text;
+  }
+  function setStatus(text) { statusEl.textContent = text; }
+
+  /* ---------- audio + haptic cues ---------- */
+  var audioCtx = null;
+  function ctx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+  function tone(freq, dur, delay, type) {
+    var c = ctx();
+    var osc = c.createOscillator();
+    var gain = c.createGain();
+    osc.type = type || "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, c.currentTime + (delay || 0));
+    gain.gain.linearRampToValueAtTime(0.2, c.currentTime + (delay || 0) + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + (delay || 0) + dur);
+    osc.connect(gain).connect(c.destination);
+    osc.start(c.currentTime + (delay || 0));
+    osc.stop(c.currentTime + (delay || 0) + dur + 0.05);
+  }
+  function cueMatch() {
+    tone(660, 0.12, 0, "sine");
+    tone(880, 0.16, 0.1, "sine");
+    if (navigator.vibrate) navigator.vibrate([90]);
+  }
+  function cueMismatch() {
+    tone(220, 0.18, 0, "square");
+    tone(180, 0.2, 0.16, "square");
+    if (navigator.vibrate) navigator.vibrate([90, 60, 90]);
+  }
+  function cueUncertain() {
+    tone(440, 0.25, 0, "triangle");
+    if (navigator.vibrate) navigator.vibrate([180]);
+  }
+
+  /* ---------- setup ---------- */
+  (function initSetup() {
+    var key = safeGet(KEY_STORE);
+    var model = safeGet(MODEL_STORE);
+    if (model) modelSel.value = model;
+    if (key) {
+      apiKeyInput.value = key;
+      enterApp();
+    }
+  })();
+
+  saveKey.addEventListener("click", function () {
+    var key = apiKeyInput.value.trim();
+    if (!key) { setStatus("Enter an API key first."); return; }
+    safeSet(KEY_STORE, key);
+    safeSet(MODEL_STORE, modelSel.value);
+    enterApp();
+  });
+
+  changeKey.addEventListener("click", function () {
+    setup.hidden = false;
+    modeSection.hidden = true;
+    intakeSection.hidden = true;
+    scanSection.hidden = true;
+    changeKey.hidden = true;
+  });
+
+  function enterApp() {
+    setup.hidden = true;
+    changeKey.hidden = false;
+    modeSection.hidden = false;
+    setMode("confirm");
+  }
+
+  /* ---------- mode switch ---------- */
+  function setMode(m) {
+    mode = m;
+    modeConfirmBtn.setAttribute("aria-pressed", m === "confirm" ? "true" : "false");
+    modeOpenBtn.setAttribute("aria-pressed", m === "open" ? "true" : "false");
+    expected = null;
+    parsedEcho.textContent = "";
+    confirmRow.hidden = true;
+    rideText.value = "";
+    rideShot.value = "";
+    if (m === "confirm") {
+      intakeSection.hidden = false;
+      scanSection.hidden = true;
+    } else {
+      intakeSection.hidden = true;
+      scanSection.hidden = false;
+      expectedSummary.textContent = "Open identification: no prior details needed.";
+    }
+  }
+  modeConfirmBtn.addEventListener("click", function () { setMode("confirm"); });
+  modeOpenBtn.addEventListener("click", function () { setMode("open"); });
+
+  /* ---------- helpers ---------- */
+  function fileToBase64(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(reader.result.split(",")[1]); };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function callClaude(contentBlocks, maxTokens) {
+    var key = safeGet(KEY_STORE);
+    var model = safeGet(MODEL_STORE) || "claude-sonnet-4-6";
+    return fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: model,
+        max_tokens: maxTokens || 400,
+        messages: [{ role: "user", content: contentBlocks }]
+      })
+    }).then(function (res) {
+      if (!res.ok) {
+        return res.text().then(function () {
+          var msg = "Something went wrong (" + res.status + ").";
+          if (res.status === 401) msg = "The API key was rejected. Use Change key or model to fix it.";
+          else if (res.status === 429) msg = "Too many requests. Wait a few seconds and try again.";
+          else if (res.status === 529 || res.status === 500) msg = "The service is busy. Try again shortly.";
+          throw new Error(msg);
+        });
+      }
+      return res.json();
+    }).then(function (data) {
+      var text = "";
+      (data.content || []).forEach(function (block) {
+        if (block.type === "text") text += block.text;
+      });
+      var cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+      try {
+        return JSON.parse(cleaned);
+      } catch (e) {
+        throw new Error("Could not read the response. Try again.");
+      }
+    });
+  }
+
+  /* ---------- Mode A: parse ride details ---------- */
+  var RIDE_PARSE_PROMPT =
+    "You are extracting private-hire vehicle details from either a free-text description or a screenshot of a ride-booking app (Grab, Gojek, etc). " +
+    "Return ONLY minified JSON, no prose, no markdown fences, matching exactly this shape: " +
+    '{"found":true|false,"plate":string|null,"colour":string|null,"brand":string|null,"model":string|null,"detail":string}. ' +
+    "Use null for any field you cannot determine. Do not guess a plate number if it is not clearly legible or stated. " +
+    "'detail' is a short one-sentence note, e.g. flagging low confidence on any field, or explaining why found is false.";
+
+  parseRide.addEventListener("click", function () {
+    var text = rideText.value.trim();
+    var file = rideShot.files[0];
+    if (!text && !file) {
+      setStatus("Type a description or choose a screenshot first.");
+      return;
+    }
+    parseRide.disabled = true;
+    setStatus("Reading your ride details...");
+    parsedEcho.textContent = "";
+    confirmRow.hidden = true;
+
+    var blocksPromise;
+    if (file) {
+      blocksPromise = fileToBase64(file).then(function (b64) {
+        return [
+          { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: b64 } },
+          { type: "text", text: RIDE_PARSE_PROMPT + (text ? (" Additional context from the user: " + text) : "") }
+        ];
+      });
+    } else {
+      blocksPromise = Promise.resolve([
+        { type: "text", text: RIDE_PARSE_PROMPT + " User's description: " + text }
+      ]);
+    }
+
+    blocksPromise.then(function (blocks) {
+      return callClaude(blocks, 300);
+    }).then(function (json) {
+      parseRide.disabled = false;
+      if (!json.found) {
+        parsedEcho.className = "";
+        parsedEcho.textContent = "Could not find car details. " + (json.detail || "Try describing it, or a clearer screenshot.");
+        setStatus("");
+        return;
+      }
+      expected = {
+        plate: json.plate || null,
+        colour: json.colour || null,
+        brand: json.brand || null,
+        model: json.model || null
+      };
+      var parts = [];
+      if (expected.colour) parts.push(expected.colour);
+      if (expected.brand) parts.push(expected.brand);
+      if (expected.model) parts.push(expected.model);
+      var summary = parts.length ? parts.join(" ") : "car";
+      var plateText = expected.plate ? (", plate " + expected.plate) : ", plate not found";
+      parsedEcho.textContent = "Got it: " + summary + plateText + ". " + (json.detail || "");
+      confirmRow.hidden = false;
+      setStatus("Check the details, then confirm or try again.");
+    }).catch(function (err) {
+      parseRide.disabled = false;
+      parsedEcho.textContent = "Error: " + err.message;
+      setStatus("");
+    });
+  });
+
+  editRideBtn.addEventListener("click", function () {
+    expected = null;
+    parsedEcho.textContent = "";
+    confirmRow.hidden = true;
+    setStatus("");
+  });
+
+  confirmRideBtn.addEventListener("click", function () {
+    intakeSection.hidden = true;
+    scanSection.hidden = false;
+    var parts = [];
+    if (expected.colour) parts.push(expected.colour);
+    if (expected.brand) parts.push(expected.brand);
+    if (expected.model) parts.push(expected.model);
+    var summary = parts.length ? parts.join(" ") : "car";
+    expectedSummary.textContent = "Looking for: " + summary + (expected.plate ? (", plate " + expected.plate) : ", plate unknown");
+  });
+
+  /* ---------- camera ---------- */
+  startCam.addEventListener("click", function () {
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 } },
+      audio: false
+    }).then(function (s) {
+      stream = s;
+      video.srcObject = s;
+      startCam.disabled = true;
+      identifyBtn.disabled = false;
+      liveBtn.disabled = false;
+      setStatus("Camera ready. Point at the car.");
+    }).catch(function (err) {
+      var msg = "Could not start the camera.";
+      if (err && err.name === "NotAllowedError") msg = "Camera permission was denied. Allow camera access, then try again.";
+      else if (err && err.name === "NotFoundError") msg = "No camera was found on this device.";
+      else if (location.protocol !== "https:" && location.hostname !== "localhost") msg = "The camera needs a secure connection (https).";
+      showResult(msg, "error");
+    });
+  });
+
+  function captureFrame() {
+    var vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return null;
+    var maxW = 1600;
+    var scale = vw > maxW ? maxW / vw : 1;
+    canvas.width = Math.round(vw * scale);
+    canvas.height = Math.round(vh * scale);
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
+  }
+
+  /* ---------- Mode A & B scan prompts ---------- */
+  function confirmPrompt() {
+    return "You are confirming whether a car in a photo matches a specific expected private-hire vehicle. " +
+      "Expected vehicle: plate=" + (expected.plate || "unknown") +
+      ", colour=" + (expected.colour || "unknown") +
+      ", brand=" + (expected.brand || "unknown") +
+      ", model=" + (expected.model || "unknown") + ". " +
+      "Look at the photo and compare. Return ONLY minified JSON, no prose, no markdown fences: " +
+      '{"vehicle_detected":true|false,"match_status":"match"|"mismatch"|"uncertain","matched_fields":[string],"mismatched_fields":[string],"detected":{"plate":string|null,"colour":string|null,"brand":string|null,"model":string|null},"detail":string}. ' +
+      "Use 'uncertain' if the photo is unclear, too far, or key fields (especially plate) cannot be read confidently — do not guess. " +
+      "'detail' is one short spoken-style sentence explaining the result.";
+  }
+
+  var OPEN_PROMPT =
+    "Identify the private-hire or passenger car in this photo. Return ONLY minified JSON, no prose, no markdown fences: " +
+    '{"vehicle_detected":true|false,"plate":string|null,"plate_confidence":"high"|"medium"|"low"|null,"colour":string|null,"brand":string|null,"model":string|null,"model_confidence":"high"|"medium"|"low"|null,"detail":string}. ' +
+    "Set vehicle_detected to false if no car is clearly visible. Never guess a plate character you cannot actually read; use null instead. " +
+    "'detail' is one short spoken-style sentence, noting anything relevant like multiple cars in frame or poor lighting.";
+
+  function runScan(isLive) {
+    if (busy) return;
+    var b64 = captureFrame();
+    if (!b64) { setStatus("Camera not ready yet."); return; }
+    busy = true;
+    if (!isLive) { identifyBtn.disabled = true; }
+    setStatus(isLive ? "Scanning..." : "Reading the car...");
+
+    var promptText = mode === "confirm" ? confirmPrompt() : OPEN_PROMPT;
+    var blocks = [
+      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: b64 } },
+      { type: "text", text: promptText }
+    ];
+
+    callClaude(blocks, 350).then(function (json) {
+      busy = false;
+      if (!isLive) identifyBtn.disabled = false;
+      handleScanResult(json);
+    }).catch(function (err) {
+      busy = false;
+      if (!isLive) identifyBtn.disabled = false;
+      setStatus(err.message);
+      if (!isLive) showResult("Could not complete the scan.", "error");
+    });
+  }
+
+  function handleScanResult(json) {
+    if (!json.vehicle_detected) {
+      showResult("No car detected.", "");
+      setStatus(json.detail || "Point the camera at the car and try again.");
+      return;
+    }
+    if (mode === "confirm") {
+      var d = json.detected || {};
+      var detailBits = [];
+      if (json.matched_fields && json.matched_fields.length) detailBits.push(json.matched_fields.join(" and ") + " match" + (json.matched_fields.length > 1 ? "" : "es"));
+      if (json.mismatched_fields && json.mismatched_fields.length) detailBits.push(json.mismatched_fields.join(" and ") + " different");
+      var line = "";
+      if (json.match_status === "match") {
+        line = "Match. " + (detailBits.length ? detailBits.join(". ") + "." : "");
+        showResult(line.trim(), "match");
+        cueMatch();
+      } else if (json.match_status === "mismatch") {
+        line = "Mismatch. " + (detailBits.length ? detailBits.join(". ") + "." : "");
+        showResult(line.trim(), "mismatch");
+        cueMismatch();
+      } else {
+        line = "Uncertain. " + (json.detail || "Move closer and try again.");
+        showResult(line.trim(), "uncertain");
+        cueUncertain();
+      }
+      setStatus(json.detail || "");
+    } else {
+      var parts = [];
+      if (json.brand) parts.push(json.brand);
+      if (json.model) parts.push(json.model);
+      var name = parts.length ? parts.join(" ") : "Car";
+      var plate = json.plate ? (", plate " + json.plate) : ", plate not legible";
+      var colour = json.colour ? (json.colour + " ") : "";
+      showResult(colour + name + plate + ".", "");
+      setStatus(json.detail || "");
+    }
+  }
+
+  identifyBtn.addEventListener("click", function () { runScan(false); });
+
+  liveBtn.addEventListener("click", function () {
+    if (liveTimer) {
+      clearInterval(liveTimer);
+      liveTimer = null;
+      liveBtn.textContent = "Start Live mode";
+      liveBtn.classList.remove("live-on");
+      identifyBtn.disabled = false;
+      setStatus("Live mode stopped.");
+    } else {
+      liveBtn.textContent = "Stop Live mode";
+      liveBtn.classList.add("live-on");
+      identifyBtn.disabled = true;
+      setStatus("Live mode running.");
+      runScan(true);
+      liveTimer = setInterval(function () { runScan(true); }, LIVE_INTERVAL_MS);
+    }
+  });
+})();
+</script>
+</body>
+</html>
