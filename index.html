@@ -15,6 +15,7 @@
     --text: #f2f2f2;
     --muted: #a7a9ad;
     --radius: 14px;
+    --toolbar-h: 92px;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -23,12 +24,11 @@
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     line-height: 1.4;
-    padding-bottom: 40px;
   }
-  main { max-width: 560px; margin: 0 auto; padding: 20px 16px 60px; }
-  h1 { font-size: 1.6rem; margin: 4px 0 2px; }
-  .tagline { color: var(--muted); margin: 0 0 20px; }
-  h2 { font-size: 1.1rem; margin: 0 0 4px; }
+  main { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 1.4rem; margin: 4px 0 2px; }
+  .tagline { color: var(--muted); margin: 0 0 18px; font-size: 0.9rem; }
+  h2 { font-size: 1.15rem; margin: 0 0 4px; }
   .card {
     background: var(--card);
     border-radius: var(--radius);
@@ -69,21 +69,38 @@
     min-height: 54px;
     margin-top: 10px;
   }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.on { background: var(--ok); color: #06210f; }
   button.live-on { background: var(--ok); color: #06210f; }
-  .segmented { display: flex; gap: 8px; margin-top: 8px; }
-  .segmented button {
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+  }
+
+  /* top utility row: small but full min touch target height */
+  .top-row { display: flex; gap: 10px; margin-bottom: 14px; }
+  .top-row button {
     flex: 1;
+    background: #1d1f24;
+    color: var(--muted);
+    min-height: 48px;
+    font-size: 0.92rem;
+  }
+
+  .segmented-choice { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+  .segmented-choice button {
     background: #0e0f12;
     border: 1px solid #33343a;
-    min-height: 52px;
+    min-height: 76px;
+    text-align: left;
+    padding: 14px 16px;
   }
-  .segmented button[aria-pressed="true"] {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
+  .segmented-choice button .choice-title { display: block; font-size: 1.05rem; font-weight: 700; }
+  .segmented-choice button .choice-sub { display: block; color: var(--muted); font-size: 0.85rem; margin-top: 2px; font-weight: 400; }
+
   .hint { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
   video { width: 100%; border-radius: var(--radius); background: #000; margin-top: 14px; aspect-ratio: 4/3; object-fit: cover; }
+
   #result { font-size: 1.15rem; font-weight: 700; margin-top: 14px; min-height: 1.4em; }
   #result.match { color: var(--ok); }
   #result.mismatch { color: var(--bad); }
@@ -91,6 +108,9 @@
   #result.error { color: var(--bad); }
   #status { color: var(--muted); margin-top: 6px; min-height: 1.2em; }
   #parsedEcho { margin-top: 10px; font-weight: 600; }
+
+  .screen { display: block; }
+  .screen[hidden] { display: none !important; }
   [hidden] { display: none !important; }
   .visually-hidden {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -98,6 +118,25 @@
   }
   .row { display: flex; gap: 10px; margin-top: 10px; }
   .row > button { flex: 1; }
+
+  /* scan screen needs bottom padding so content clears the fixed toolbar */
+  #scanScreen { padding-bottom: calc(var(--toolbar-h) + 10px); }
+
+  #actionBar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    display: flex;
+    gap: 10px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: #101115;
+    border-top: 1px solid #26282e;
+    z-index: 20;
+  }
+  #actionBar button {
+    flex: 1;
+    margin-top: 0;
+    min-height: 60px;
+  }
 </style>
 </head>
 <body>
@@ -106,8 +145,8 @@
   <p class="tagline">Identify a private-hire car, or confirm it's the one you booked.</p>
 
   <!-- SETUP -->
-  <section id="setup" class="card" aria-labelledby="setup-h">
-    <h2 id="setup-h">Set up</h2>
+  <section id="setupScreen" class="screen card" aria-labelledby="setup-h">
+    <h2 id="setup-h" tabindex="-1">Set up</h2>
     <label for="apiKey">Anthropic API key</label>
     <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
     <label for="modelSel">Model</label>
@@ -120,54 +159,74 @@
   </section>
 
   <!-- MODE SELECT -->
-  <section id="modeSection" class="card" hidden aria-labelledby="mode-h">
-    <h2 id="mode-h">What do you need?</h2>
-    <div class="segmented" role="group" aria-label="Choose mode">
-      <button id="modeConfirm" aria-pressed="true">Confirm my ride</button>
-      <button id="modeOpen" aria-pressed="false">Identify a car</button>
+  <section id="modeScreen" class="screen" aria-labelledby="mode-h" hidden>
+    <div class="top-row">
+      <button id="settingsFromMode">Settings</button>
+    </div>
+    <div class="card">
+      <h2 id="mode-h" tabindex="-1">What do you need?</h2>
+      <div class="segmented-choice">
+        <button id="modeConfirm">
+          <span class="choice-title">Confirm my ride</span>
+          <span class="choice-sub">You already booked a car and want to check it's the right one</span>
+        </button>
+        <button id="modeOpen">
+          <span class="choice-title">Identify a car</span>
+          <span class="choice-sub">No booking details — just find out what car this is</span>
+        </button>
+      </div>
     </div>
   </section>
 
   <!-- MODE A: INTAKE -->
-  <section id="intakeSection" class="card" hidden aria-labelledby="intake-h">
-    <h2 id="intake-h">Your ride details</h2>
-    <p class="hint">Type or dictate a description, or upload a screenshot of your booking screen. Only the vehicle details are kept; the image is discarded after reading.</p>
+  <section id="intakeScreen" class="screen" aria-labelledby="intake-h" hidden>
+    <div class="top-row">
+      <button id="backFromIntake">Change mode</button>
+      <button id="settingsFromIntake">Settings</button>
+    </div>
+    <div class="card">
+      <h2 id="intake-h" tabindex="-1">Your ride details</h2>
+      <p class="hint">Type or dictate a description, or upload a screenshot of your booking screen. Only the vehicle details are kept; the image is discarded after reading.</p>
 
-    <label for="rideText">Describe the car (optional if uploading a screenshot)</label>
-    <textarea id="rideText" placeholder="e.g. black Toyota Camry, plate SKX1234A, Grab"></textarea>
+      <label for="rideText">Describe the car (optional if uploading a screenshot)</label>
+      <textarea id="rideText" placeholder="e.g. black Toyota Camry, plate SKX1234A"></textarea>
 
-    <label for="rideShot">Or upload a screenshot of your booking</label>
-    <input type="file" id="rideShot" accept="image/*">
+      <label for="rideShot">Or upload a screenshot of your booking</label>
+      <input type="file" id="rideShot" accept="image/*">
 
-    <button id="parseRide" class="primary">Get ride details</button>
+      <button id="parseRide" class="primary">Get ride details</button>
 
-    <div id="parsedEcho" role="status" aria-live="assertive" aria-atomic="true"></div>
-    <div class="row" id="confirmRow" hidden>
-      <button id="confirmRide" class="primary" style="margin-top:0;">Confirm, this is correct</button>
-      <button id="editRide" class="secondary" style="margin-top:0;">Try again</button>
+      <div id="parsedEcho" role="status" aria-live="assertive" aria-atomic="true"></div>
+      <div class="row" id="confirmRow" hidden>
+        <button id="confirmRide" class="primary" style="margin-top:0;">Confirm, this is correct</button>
+        <button id="editRide" class="secondary" style="margin-top:0;">Try again</button>
+      </div>
     </div>
   </section>
 
   <!-- SCAN -->
-  <section id="scanSection" class="card" hidden aria-labelledby="scan-h">
-    <h2 id="scan-h">Scan</h2>
-    <div id="expectedSummary" class="hint"></div>
-
-    <button id="startCam" class="primary">Start camera</button>
-    <video id="video" playsinline autoplay muted aria-hidden="true"></video>
-
-    <div class="row">
-      <button id="identifyBtn" class="secondary" disabled style="margin-top:0;">Identify</button>
-      <button id="liveBtn" class="secondary" disabled style="margin-top:0;">Start Live mode</button>
+  <section id="scanScreen" class="screen" aria-labelledby="scan-h" hidden>
+    <div class="top-row">
+      <button id="backFromScan">Change mode</button>
+      <button id="editRideFromScan" hidden>Edit ride details</button>
+      <button id="settingsFromScan">Settings</button>
     </div>
+    <div class="card">
+      <h2 id="scan-h" tabindex="-1">Scan</h2>
+      <div id="expectedSummary" class="hint"></div>
 
-    <!-- Region A: assertive, key results only -->
-    <div id="result" role="status" aria-live="assertive" aria-atomic="true"></div>
-    <!-- Region B: polite, status/detail/errors -->
-    <div id="status" role="status" aria-live="polite" aria-atomic="true"></div>
+      <button id="startCam" class="primary">Start camera</button>
+      <video id="video" playsinline autoplay muted aria-hidden="true"></video>
+
+      <div id="result" role="status" aria-live="assertive" aria-atomic="true"></div>
+      <div id="status" role="status" aria-live="polite" aria-atomic="true"></div>
+    </div>
   </section>
 
-  <button id="changeKey" class="secondary" hidden style="margin-top:20px;">Change key or model</button>
+  <div id="actionBar" hidden>
+    <button id="identifyBtn" class="secondary" disabled>Identify</button>
+    <button id="liveBtn" class="secondary" disabled>Start Live mode</button>
+  </div>
 </main>
 
 <canvas id="canvas" style="display:none;"></canvas>
@@ -182,15 +241,37 @@
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
-  var setup = document.getElementById("setup");
-  var modeSection = document.getElementById("modeSection");
-  var intakeSection = document.getElementById("intakeSection");
-  var scanSection = document.getElementById("scanSection");
-  var changeKey = document.getElementById("changeKey");
+  var screens = {
+    setup: document.getElementById("setupScreen"),
+    mode: document.getElementById("modeScreen"),
+    intake: document.getElementById("intakeScreen"),
+    scan: document.getElementById("scanScreen")
+  };
+  var actionBar = document.getElementById("actionBar");
+
+  function showScreen(name) {
+    Object.keys(screens).forEach(function (k) {
+      screens[k].hidden = (k !== name);
+    });
+    actionBar.hidden = (name !== "scan");
+    var heading = screens[name].querySelector("h2");
+    if (heading) {
+      // move focus so screen readers announce the new screen context
+      window.setTimeout(function () { heading.focus(); }, 30);
+    }
+    window.scrollTo(0, 0);
+  }
 
   var apiKeyInput = document.getElementById("apiKey");
   var modelSel = document.getElementById("modelSel");
   var saveKey = document.getElementById("saveKey");
+
+  var settingsFromMode = document.getElementById("settingsFromMode");
+  var settingsFromIntake = document.getElementById("settingsFromIntake");
+  var settingsFromScan = document.getElementById("settingsFromScan");
+  var backFromIntake = document.getElementById("backFromIntake");
+  var backFromScan = document.getElementById("backFromScan");
+  var editRideFromScan = document.getElementById("editRideFromScan");
 
   var modeConfirmBtn = document.getElementById("modeConfirm");
   var modeOpenBtn = document.getElementById("modeOpen");
@@ -273,54 +354,59 @@
     }
     if (key) {
       apiKeyInput.value = key;
-      enterApp();
+      showScreen("mode");
     }
   })();
 
   saveKey.addEventListener("click", function () {
     var key = apiKeyInput.value.trim();
-    if (!key) { setStatus("Enter an API key first."); return; }
+    if (!key) { setStatus(""); apiKeyInput.focus(); return; }
     safeSet(KEY_STORE, key);
     safeSet(MODEL_STORE, modelSel.value);
-    enterApp();
+    showScreen("mode");
   });
 
-  changeKey.addEventListener("click", function () {
-    setup.hidden = false;
-    modeSection.hidden = true;
-    intakeSection.hidden = true;
-    scanSection.hidden = true;
-    changeKey.hidden = true;
-  });
-
-  function enterApp() {
-    setup.hidden = true;
-    changeKey.hidden = false;
-    modeSection.hidden = false;
-    setMode("confirm");
+  function openSettings() {
+    stopCamera();
+    if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+    showScreen("setup");
   }
+  settingsFromMode.addEventListener("click", openSettings);
+  settingsFromIntake.addEventListener("click", openSettings);
+  settingsFromScan.addEventListener("click", openSettings);
 
   /* ---------- mode switch ---------- */
-  function setMode(m) {
-    mode = m;
-    modeConfirmBtn.setAttribute("aria-pressed", m === "confirm" ? "true" : "false");
-    modeOpenBtn.setAttribute("aria-pressed", m === "open" ? "true" : "false");
+  function resetIntake() {
     expected = null;
     parsedEcho.textContent = "";
     confirmRow.hidden = true;
     rideText.value = "";
     rideShot.value = "";
-    if (m === "confirm") {
-      intakeSection.hidden = false;
-      scanSection.hidden = true;
-    } else {
-      intakeSection.hidden = true;
-      scanSection.hidden = false;
-      expectedSummary.textContent = "Open identification: no prior details needed.";
-    }
   }
-  modeConfirmBtn.addEventListener("click", function () { setMode("confirm"); });
-  modeOpenBtn.addEventListener("click", function () { setMode("open"); });
+
+  modeConfirmBtn.addEventListener("click", function () {
+    mode = "confirm";
+    resetIntake();
+    showScreen("intake");
+  });
+  modeOpenBtn.addEventListener("click", function () {
+    mode = "open";
+    resetIntake();
+    editRideFromScan.hidden = true;
+    expectedSummary.textContent = "Open identification: no prior details needed.";
+    showScreen("scan");
+  });
+
+  backFromIntake.addEventListener("click", function () { showScreen("mode"); });
+  backFromScan.addEventListener("click", function () {
+    stopCamera();
+    if (liveTimer) { clearInterval(liveTimer); liveTimer = null; liveBtn.textContent = "Start Live mode"; liveBtn.classList.remove("live-on"); }
+    showScreen("mode");
+  });
+  editRideFromScan.addEventListener("click", function () {
+    stopCamera();
+    showScreen("intake");
+  });
 
   /* ---------- helpers ---------- */
   function fileToBase64(file) {
@@ -352,7 +438,7 @@
       if (!res.ok) {
         return res.text().then(function () {
           var msg = "Something went wrong (" + res.status + ").";
-          if (res.status === 401) msg = "The API key was rejected. Use Change key or model to fix it.";
+          if (res.status === 401) msg = "The API key was rejected. Open Settings to fix it.";
           else if (res.status === 429) msg = "Too many requests. Wait a few seconds and try again.";
           else if (res.status === 529 || res.status === 500) msg = "The service is busy. Try again shortly.";
           throw new Error(msg);
@@ -385,7 +471,8 @@
     var text = rideText.value.trim();
     var file = rideShot.files[0];
     if (!text && !file) {
-      setStatus("Type a description or choose a screenshot first.");
+      setStatus("");
+      parsedEcho.textContent = "Type a description or choose a screenshot first.";
       return;
     }
     parseRide.disabled = true;
@@ -447,31 +534,50 @@
   });
 
   confirmRideBtn.addEventListener("click", function () {
-    intakeSection.hidden = true;
-    scanSection.hidden = false;
+    editRideFromScan.hidden = false;
     var parts = [];
     if (expected.colour) parts.push(expected.colour);
     if (expected.brand) parts.push(expected.brand);
     if (expected.model) parts.push(expected.model);
     var summary = parts.length ? parts.join(" ") : "car";
     expectedSummary.textContent = "Looking for: " + summary + (expected.plate ? (", plate " + expected.plate) : ", plate unknown");
+    showScreen("scan");
   });
 
-  /* ---------- camera ---------- */
+  /* ---------- camera (toggle) ---------- */
+  function stopCamera() {
+    if (stream) {
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      stream = null;
+    }
+    video.srcObject = null;
+    startCam.textContent = "Start camera";
+    startCam.classList.remove("on");
+    identifyBtn.disabled = true;
+    liveBtn.disabled = true;
+  }
+
   startCam.addEventListener("click", function () {
+    if (stream) {
+      if (liveTimer) { clearInterval(liveTimer); liveTimer = null; liveBtn.textContent = "Start Live mode"; liveBtn.classList.remove("live-on"); }
+      stopCamera();
+      setStatus("Camera stopped.");
+      return;
+    }
     navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 } },
       audio: false
     }).then(function (s) {
       stream = s;
       video.srcObject = s;
-      startCam.disabled = true;
+      startCam.textContent = "Stop camera";
+      startCam.classList.add("on");
       identifyBtn.disabled = false;
       liveBtn.disabled = false;
       setStatus("Camera ready. Point at the car.");
     }).catch(function (err) {
       var msg = "Could not start the camera.";
-      if (err && err.name === "NotAllowedError") msg = "Camera permission was denied. Allow camera access, then try again.";
+      if (err && err.name === "NotAllowedError") msg = "Camera permission was denied. Allow camera access in your browser's site settings, then try again.";
       else if (err && err.name === "NotFoundError") msg = "No camera was found on this device.";
       else if (location.protocol !== "https:" && location.hostname !== "localhost") msg = "The camera needs a secure connection (https).";
       showResult(msg, "error");
@@ -541,7 +647,6 @@
       return;
     }
     if (mode === "confirm") {
-      var d = json.detected || {};
       var detailBits = [];
       if (json.matched_fields && json.matched_fields.length) detailBits.push(json.matched_fields.join(" and ") + " match" + (json.matched_fields.length > 1 ? "" : "es"));
       if (json.mismatched_fields && json.mismatched_fields.length) detailBits.push(json.mismatched_fields.join(" and ") + " different");
