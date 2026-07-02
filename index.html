@@ -15,7 +15,8 @@
     --text: #f2f2f2;
     --muted: #a7a9ad;
     --radius: 14px;
-    --toolbar-h: 92px;
+    --toolbar-h: 96px;
+    --header-h: 56px;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -25,8 +26,36 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     line-height: 1.4;
   }
-  main { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; }
-  h1 { font-size: 1.4rem; margin: 4px 0 2px; }
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: var(--header-h);
+    padding: 0 10px;
+    background: #101115;
+    border-bottom: 1px solid #26282e;
+  }
+  .app-header h1 {
+    flex: 1;
+    text-align: center;
+    font-size: 1.15rem;
+    margin: 0;
+  }
+  .icon-btn {
+    background: transparent;
+    color: var(--accent);
+    min-height: 40px;
+    min-width: 64px;
+    padding: 8px 10px;
+    font-size: 0.92rem;
+    flex: 0 0 auto;
+  }
+  .icon-btn[hidden] { visibility: hidden; display: block !important; } /* keep layout balance when hidden */
+
+  main { max-width: 560px; margin: 0 auto; padding: 16px 16px 40px; }
   .tagline { color: var(--muted); margin: 0 0 18px; font-size: 0.9rem; }
   h2 { font-size: 1.15rem; margin: 0 0 4px; }
   .card {
@@ -47,6 +76,7 @@
   }
   textarea { min-height: 80px; resize: vertical; }
   input[type=file] { width: 100%; padding: 10px 0; color: var(--text); }
+  input[type=checkbox] { width: 26px; height: 26px; accent-color: var(--accent); flex: 0 0 auto; }
   button {
     font: inherit;
     border: none;
@@ -77,15 +107,8 @@
     outline-offset: 2px;
   }
 
-  /* top utility row: small but full min touch target height */
-  .top-row { display: flex; gap: 10px; margin-bottom: 14px; }
-  .top-row button {
-    flex: 1;
-    background: #1d1f24;
-    color: var(--muted);
-    min-height: 48px;
-    font-size: 0.92rem;
-  }
+  .checkbox-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+  .checkbox-row label { margin: 0; flex: 1; font-weight: 400; }
 
   .segmented-choice { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
   .segmented-choice button {
@@ -119,15 +142,14 @@
   .row { display: flex; gap: 10px; margin-top: 10px; }
   .row > button { flex: 1; }
 
-  /* scan screen needs bottom padding so content clears the fixed toolbar */
   #scanScreen { padding-bottom: calc(var(--toolbar-h) + 10px); }
 
   #actionBar {
     position: fixed;
     left: 0; right: 0; bottom: 0;
     display: flex;
-    gap: 10px;
-    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    gap: 8px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
     background: #101115;
     border-top: 1px solid #26282e;
     z-index: 20;
@@ -135,13 +157,20 @@
   #actionBar button {
     flex: 1;
     margin-top: 0;
-    min-height: 60px;
+    min-height: 66px;
+    font-size: 0.82rem;
+    padding: 8px 6px;
+    line-height: 1.2;
   }
 </style>
 </head>
 <body>
-<main>
+<div class="app-header">
+  <button id="headerBack" class="icon-btn" hidden>&#8249; Back</button>
   <h1>Car Spotter</h1>
+  <button id="headerSettings" class="icon-btn">Settings</button>
+</div>
+<main>
   <p class="tagline">Identify a private-hire car, or confirm it's the one you booked.</p>
 
   <!-- SETUP -->
@@ -154,68 +183,67 @@
       <option value="claude-sonnet-5">Sonnet 5 (more accurate)</option>
       <option value="claude-haiku-4-5-20251001">Haiku 4.5 (faster, cheaper — good for Live mode)</option>
     </select>
+
+    <label for="lensSel">Camera lens</label>
+    <select id="lensSel">
+      <option value="">Automatic (default rear camera)</option>
+    </select>
+    <button id="detectLenses" class="secondary" type="button">Detect available lenses</button>
+    <p class="hint" id="lensHint">Detecting will briefly request camera access to list your device's lenses. Support for choosing a specific lens (e.g. telephoto) varies by device — treat it as best-effort.</p>
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="ttsToggle">
+      <label for="ttsToggle">Also speak results aloud (TTS)</label>
+    </div>
+    <p class="hint">Adds spoken audio on top of your screen reader — useful if VoiceOver isn't running, or you're holding the phone out for someone else to use.</p>
+
     <button id="saveKey" class="primary">Save and continue</button>
+    <button id="backFromSetup" class="secondary" hidden type="button">Back without saving</button>
     <p class="hint">Your key stays in this browser on this device and is only sent to Anthropic's API when you scan or parse. It is never stored in the file itself.</p>
   </section>
 
   <!-- MODE SELECT -->
-  <section id="modeScreen" class="screen" aria-labelledby="mode-h" hidden>
-    <div class="top-row">
-      <button id="settingsFromMode">Settings</button>
-    </div>
-    <div class="card">
-      <h2 id="mode-h" tabindex="-1">What do you need?</h2>
-      <div class="segmented-choice">
-        <button id="modeConfirm">
-          <span class="choice-title">Confirm my ride</span>
-          <span class="choice-sub">You already booked a car and want to check it's the right one</span>
-        </button>
-        <button id="modeOpen">
-          <span class="choice-title">Identify a car</span>
-          <span class="choice-sub">No booking details — just find out what car this is</span>
-        </button>
-      </div>
+  <section id="modeScreen" class="screen card" aria-labelledby="mode-h" hidden>
+    <h2 id="mode-h" tabindex="-1">What do you need?</h2>
+    <div class="segmented-choice">
+      <button id="modeConfirm">
+        <span class="choice-title">Confirm my ride</span>
+        <span class="choice-sub">You already booked a car and want to check it's the right one</span>
+      </button>
+      <button id="modeOpen">
+        <span class="choice-title">Identify a car</span>
+        <span class="choice-sub">No booking details — just find out what car this is</span>
+      </button>
     </div>
   </section>
 
   <!-- MODE A: INTAKE -->
-  <section id="intakeScreen" class="screen" aria-labelledby="intake-h" hidden>
-    <div class="top-row">
-      <button id="backFromIntake">Change mode</button>
-      <button id="settingsFromIntake">Settings</button>
-    </div>
-    <div class="card">
-      <h2 id="intake-h" tabindex="-1">Your ride details</h2>
-      <p class="hint">Type or dictate a description, or upload a screenshot of your booking screen. Only the vehicle details are kept; the image is discarded after reading.</p>
+  <section id="intakeScreen" class="screen card" aria-labelledby="intake-h" hidden>
+    <h2 id="intake-h" tabindex="-1">Your ride details</h2>
+    <p class="hint">Type or dictate a description, or upload a screenshot of your booking screen. Only the vehicle details are kept; the image is discarded after reading.</p>
 
-      <label for="rideText">Describe the car (optional if uploading a screenshot)</label>
-      <textarea id="rideText" placeholder="e.g. black Toyota Camry, plate SKX1234A"></textarea>
+    <label for="rideText">Describe the car (optional if uploading a screenshot)</label>
+    <textarea id="rideText" placeholder="e.g. black Toyota Camry, plate SKX1234A"></textarea>
 
-      <label for="rideShot">Or upload a screenshot of your booking</label>
-      <input type="file" id="rideShot" accept="image/*">
+    <label for="rideShot">Or upload a screenshot of your booking</label>
+    <input type="file" id="rideShot" accept="image/*">
 
-      <button id="parseRide" class="primary">Get ride details</button>
+    <button id="parseRide" class="primary">Get ride details</button>
 
-      <div id="parsedEcho" role="status" aria-live="assertive" aria-atomic="true"></div>
-      <div class="row" id="confirmRow" hidden>
-        <button id="confirmRide" class="primary" style="margin-top:0;">Confirm, this is correct</button>
-        <button id="editRide" class="secondary" style="margin-top:0;">Try again</button>
-      </div>
+    <div id="parsedEcho" role="status" aria-live="assertive" aria-atomic="true"></div>
+    <div class="row" id="confirmRow" hidden>
+      <button id="confirmRide" class="primary" style="margin-top:0;">Confirm, this is correct</button>
+      <button id="editRide" class="secondary" style="margin-top:0;">Try again</button>
     </div>
   </section>
 
   <!-- SCAN -->
   <section id="scanScreen" class="screen" aria-labelledby="scan-h" hidden>
-    <div class="top-row">
-      <button id="backFromScan">Change mode</button>
-      <button id="editRideFromScan" hidden>Edit ride details</button>
-      <button id="settingsFromScan">Settings</button>
-    </div>
     <div class="card">
       <h2 id="scan-h" tabindex="-1">Scan</h2>
       <div id="expectedSummary" class="hint"></div>
+      <button id="editRideFromScan" class="secondary" hidden type="button">Edit ride details</button>
 
-      <button id="startCam" class="primary">Start camera</button>
       <video id="video" playsinline autoplay muted aria-hidden="true"></video>
 
       <div id="result" role="status" aria-live="assertive" aria-atomic="true"></div>
@@ -224,6 +252,7 @@
   </section>
 
   <div id="actionBar" hidden>
+    <button id="startCam" class="secondary">Start camera</button>
     <button id="identifyBtn" class="secondary" disabled>Identify</button>
     <button id="liveBtn" class="secondary" disabled>Start Live mode</button>
   </div>
@@ -237,6 +266,8 @@
 
   var KEY_STORE = "carspotter_key";
   var MODEL_STORE = "carspotter_model";
+  var LENS_STORE = "carspotter_lens";
+  var TTS_STORE = "carspotter_tts";
 
   function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
@@ -248,15 +279,22 @@
     scan: document.getElementById("scanScreen")
   };
   var actionBar = document.getElementById("actionBar");
+  var headerBack = document.getElementById("headerBack");
+  var headerSettings = document.getElementById("headerSettings");
+
+  var currentScreen = "setup";
+  var settingsReturnScreen = null;
 
   function showScreen(name) {
     Object.keys(screens).forEach(function (k) {
       screens[k].hidden = (k !== name);
     });
+    currentScreen = name;
     actionBar.hidden = (name !== "scan");
+    headerSettings.hidden = (name === "setup");
+    headerBack.hidden = !(name === "intake" || name === "scan");
     var heading = screens[name].querySelector("h2");
     if (heading) {
-      // move focus so screen readers announce the new screen context
       window.setTimeout(function () { heading.focus(); }, 30);
     }
     window.scrollTo(0, 0);
@@ -264,14 +302,12 @@
 
   var apiKeyInput = document.getElementById("apiKey");
   var modelSel = document.getElementById("modelSel");
+  var lensSel = document.getElementById("lensSel");
+  var lensHint = document.getElementById("lensHint");
+  var detectLenses = document.getElementById("detectLenses");
+  var ttsToggle = document.getElementById("ttsToggle");
   var saveKey = document.getElementById("saveKey");
-
-  var settingsFromMode = document.getElementById("settingsFromMode");
-  var settingsFromIntake = document.getElementById("settingsFromIntake");
-  var settingsFromScan = document.getElementById("settingsFromScan");
-  var backFromIntake = document.getElementById("backFromIntake");
-  var backFromScan = document.getElementById("backFromScan");
-  var editRideFromScan = document.getElementById("editRideFromScan");
+  var backFromSetup = document.getElementById("backFromSetup");
 
   var modeConfirmBtn = document.getElementById("modeConfirm");
   var modeOpenBtn = document.getElementById("modeOpen");
@@ -283,6 +319,7 @@
   var confirmRow = document.getElementById("confirmRow");
   var confirmRideBtn = document.getElementById("confirmRide");
   var editRideBtn = document.getElementById("editRide");
+  var editRideFromScan = document.getElementById("editRideFromScan");
 
   var expectedSummary = document.getElementById("expectedSummary");
   var startCam = document.getElementById("startCam");
@@ -299,12 +336,25 @@
   var busy = false;
   var liveTimer = null;
   var LIVE_INTERVAL_MS = 4500;
+  var ttsEnabled = false;
 
   function showResult(text, cls) {
     resultEl.className = cls || "";
     resultEl.textContent = text;
+    speak(text);
   }
   function setStatus(text) { statusEl.textContent = text; }
+
+  /* ---------- TTS ---------- */
+  function speak(text) {
+    if (!ttsEnabled || !text) return;
+    if (!("speechSynthesis" in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
 
   /* ---------- audio + haptic cues ---------- */
   var audioCtx = null;
@@ -341,39 +391,76 @@
   }
 
   /* ---------- setup ---------- */
-  (function initSetup() {
+  function loadSettingsIntoForm() {
     var key = safeGet(KEY_STORE);
     var model = safeGet(MODEL_STORE);
+    var lens = safeGet(LENS_STORE);
+    var tts = safeGet(TTS_STORE);
+    if (key) apiKeyInput.value = key;
     if (model) {
       var validOption = Array.prototype.some.call(modelSel.options, function (o) { return o.value === model; });
-      if (validOption) {
-        modelSel.value = model;
-      } else {
-        safeSet(MODEL_STORE, modelSel.value); // fall back to default, overwrite stale saved value
-      }
+      if (validOption) modelSel.value = model;
+      else safeSet(MODEL_STORE, modelSel.value);
     }
-    if (key) {
-      apiKeyInput.value = key;
+    if (lens) {
+      var lensExists = Array.prototype.some.call(lensSel.options, function (o) { return o.value === lens; });
+      if (lensExists) lensSel.value = lens;
+    }
+    ttsToggle.checked = (tts === "1");
+    ttsEnabled = ttsToggle.checked;
+  }
+
+  (function init() {
+    loadSettingsIntoForm();
+    if (safeGet(KEY_STORE)) {
       showScreen("mode");
+    } else {
+      showScreen("setup");
     }
   })();
 
   saveKey.addEventListener("click", function () {
     var key = apiKeyInput.value.trim();
-    if (!key) { setStatus(""); apiKeyInput.focus(); return; }
+    if (!key) { apiKeyInput.focus(); return; }
     safeSet(KEY_STORE, key);
     safeSet(MODEL_STORE, modelSel.value);
-    showScreen("mode");
+    safeSet(LENS_STORE, lensSel.value);
+    safeSet(TTS_STORE, ttsToggle.checked ? "1" : "0");
+    ttsEnabled = ttsToggle.checked;
+    var dest = settingsReturnScreen || "mode";
+    settingsReturnScreen = null;
+    backFromSetup.hidden = true;
+    showScreen(dest);
   });
 
-  function openSettings() {
-    stopCamera();
-    if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+  backFromSetup.addEventListener("click", function () {
+    loadSettingsIntoForm(); // discard any unsaved edits
+    var dest = settingsReturnScreen || "mode";
+    settingsReturnScreen = null;
+    backFromSetup.hidden = true;
+    showScreen(dest);
+  });
+
+  headerSettings.addEventListener("click", function () {
+    if (currentScreen === "setup") return;
+    settingsReturnScreen = currentScreen;
+    if (currentScreen === "scan") {
+      stopCamera();
+      stopLive();
+    }
+    backFromSetup.hidden = false;
     showScreen("setup");
-  }
-  settingsFromMode.addEventListener("click", openSettings);
-  settingsFromIntake.addEventListener("click", openSettings);
-  settingsFromScan.addEventListener("click", openSettings);
+  });
+
+  headerBack.addEventListener("click", function () {
+    if (currentScreen === "intake") {
+      showScreen("mode");
+    } else if (currentScreen === "scan") {
+      stopCamera();
+      stopLive();
+      showScreen("mode");
+    }
+  });
 
   /* ---------- mode switch ---------- */
   function resetIntake() {
@@ -397,14 +484,9 @@
     showScreen("scan");
   });
 
-  backFromIntake.addEventListener("click", function () { showScreen("mode"); });
-  backFromScan.addEventListener("click", function () {
-    stopCamera();
-    if (liveTimer) { clearInterval(liveTimer); liveTimer = null; liveBtn.textContent = "Start Live mode"; liveBtn.classList.remove("live-on"); }
-    showScreen("mode");
-  });
   editRideFromScan.addEventListener("click", function () {
     stopCamera();
+    stopLive();
     showScreen("intake");
   });
 
@@ -471,7 +553,6 @@
     var text = rideText.value.trim();
     var file = rideShot.files[0];
     if (!text && !file) {
-      setStatus("");
       parsedEcho.textContent = "Type a description or choose a screenshot first.";
       return;
     }
@@ -499,7 +580,6 @@
     }).then(function (json) {
       parseRide.disabled = false;
       if (!json.found) {
-        parsedEcho.className = "";
         parsedEcho.textContent = "Could not find car details. " + (json.detail || "Try describing it, or a clearer screenshot.");
         setStatus("");
         return;
@@ -544,6 +624,32 @@
     showScreen("scan");
   });
 
+  /* ---------- lens detection ---------- */
+  detectLenses.addEventListener("click", function () {
+    lensHint.textContent = "Detecting cameras...";
+    navigator.mediaDevices.getUserMedia({ video: true }).then(function (s) {
+      s.getTracks().forEach(function (t) { t.stop(); });
+      return navigator.mediaDevices.enumerateDevices();
+    }).then(function (devices) {
+      var vids = devices.filter(function (d) { return d.kind === "videoinput"; });
+      while (lensSel.options.length > 1) { lensSel.remove(1); }
+      vids.forEach(function (d, i) {
+        var opt = document.createElement("option");
+        opt.value = d.deviceId;
+        opt.textContent = d.label || ("Camera " + (i + 1));
+        lensSel.appendChild(opt);
+      });
+      var saved = safeGet(LENS_STORE);
+      if (saved) {
+        var exists = Array.prototype.some.call(lensSel.options, function (o) { return o.value === saved; });
+        if (exists) lensSel.value = saved;
+      }
+      lensHint.textContent = vids.length ? ("Found " + vids.length + " camera(s). Choose one, then Save and continue.") : "No cameras found.";
+    }).catch(function (err) {
+      lensHint.textContent = "Could not access the camera to detect lenses: " + (err && err.message ? err.message : "unknown error");
+    });
+  });
+
   /* ---------- camera (toggle) ---------- */
   function stopCamera() {
     if (stream) {
@@ -557,17 +663,40 @@
     liveBtn.disabled = true;
   }
 
+  function stopLive() {
+    if (liveTimer) {
+      clearInterval(liveTimer);
+      liveTimer = null;
+      liveBtn.textContent = "Start Live mode";
+      liveBtn.classList.remove("live-on");
+    }
+  }
+
+  function getCameraStream() {
+    var lensId = safeGet(LENS_STORE);
+    var base = { width: { ideal: 1920 }, height: { ideal: 1440 } };
+    var constraints;
+    if (lensId) {
+      constraints = { video: Object.assign({ deviceId: { exact: lensId } }, base), audio: false };
+    } else {
+      constraints = { video: Object.assign({ facingMode: { ideal: "environment" } }, base), audio: false };
+    }
+    return navigator.mediaDevices.getUserMedia(constraints).catch(function (err) {
+      if (lensId && err && err.name === "OverconstrainedError") {
+        return navigator.mediaDevices.getUserMedia({ video: Object.assign({ facingMode: { ideal: "environment" } }, base), audio: false });
+      }
+      throw err;
+    });
+  }
+
   startCam.addEventListener("click", function () {
     if (stream) {
-      if (liveTimer) { clearInterval(liveTimer); liveTimer = null; liveBtn.textContent = "Start Live mode"; liveBtn.classList.remove("live-on"); }
+      stopLive();
       stopCamera();
       setStatus("Camera stopped.");
       return;
     }
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 } },
-      audio: false
-    }).then(function (s) {
+    getCameraStream().then(function (s) {
       stream = s;
       video.srcObject = s;
       startCam.textContent = "Stop camera";
@@ -681,10 +810,7 @@
 
   liveBtn.addEventListener("click", function () {
     if (liveTimer) {
-      clearInterval(liveTimer);
-      liveTimer = null;
-      liveBtn.textContent = "Start Live mode";
-      liveBtn.classList.remove("live-on");
+      stopLive();
       identifyBtn.disabled = false;
       setStatus("Live mode stopped.");
     } else {
