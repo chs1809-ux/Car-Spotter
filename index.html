@@ -47,6 +47,10 @@
   .choice .t{display:block;font-size:1.05rem;font-weight:700}
   .choice .s{display:block;color:var(--muted);font-size:.85rem;margin-top:2px;font-weight:400}
   .hint{color:var(--muted);font-size:.85rem;margin-top:8px}
+  .code-row{display:flex;gap:8px;align-items:stretch}
+  .code-row input{flex:1;min-width:0}
+  .code-toggle{flex:0 0 auto;min-width:78px;min-height:48px;background:#24262c;
+    color:var(--text);border:1px solid #33343a;border-radius:10px;padding:0 12px;font-size:.92rem}
   .checkbox-row{display:flex;align-items:center;gap:10px;margin-top:16px}
   .checkbox-row label{margin:0;flex:1;font-weight:400}
   video{width:100%;border-radius:var(--radius);background:#000;margin-top:14px;aspect-ratio:4/3;object-fit:cover}
@@ -91,8 +95,12 @@
     <p class="hint" id="settingsNote">Changes are saved when you go back.</p>
 
     <label for="apiKey">Access code</label>
-    <input type="password" id="apiKey" autocomplete="off" spellcheck="false"
-           placeholder="e.g. hongsen-4821" aria-describedby="key-hint">
+    <div class="code-row">
+      <input type="password" id="apiKey" autocomplete="off" spellcheck="false"
+             autocapitalize="off" autocorrect="off" enterkeyhint="done"
+             placeholder="Enter your access code" aria-describedby="key-hint">
+      <button type="button" id="codeToggle" class="code-toggle" aria-pressed="false">Show</button>
+    </div>
     <p class="hint" id="key-hint">Shared with Spotter on this device. Your Anthropic key stays on the server; this code only unlocks it.</p>
 
     <label for="modelSel">Model for confirming</label>
@@ -519,6 +527,12 @@ function loadSettings(){
   if(st) styleSel.value = st;
   ttsToggle.checked = sget(K.speak) === "1";
   soundToggle.checked = sget(K.sound) !== "0";
+  apiKeyInput.type = "password";
+  if(typeof codeToggle !== "undefined" && codeToggle){
+    codeToggle.textContent = "Show";
+    codeToggle.setAttribute("aria-pressed","false");
+    codeToggle.setAttribute("aria-label","Show access code");
+  }
   styleText();
 }
 
@@ -565,6 +579,22 @@ headerBack.addEventListener("click", function(){
   if(current === "setup"){ leaveSettings(); }
   else if(current === "intake") show("mode");
   else if(current === "scan"){ stopLive(); stopGuidance(); stopCamera(); show("mode"); }
+});
+
+var codeToggle = $("codeToggle");
+codeToggle.addEventListener("click", function(){
+  var showing = apiKeyInput.type === "text";
+  apiKeyInput.type = showing ? "password" : "text";
+  codeToggle.textContent = showing ? "Show" : "Hide";
+  codeToggle.setAttribute("aria-pressed", showing ? "false" : "true");
+  codeToggle.setAttribute("aria-label", showing ? "Show access code" : "Hide access code");
+  apiKeyInput.focus();
+});
+
+/* Enter closes the keyboard instead of leaving it covering the screen.
+   enterkeyhint gives iOS a "done" key rather than a newline. */
+apiKeyInput.addEventListener("keydown", function(e){
+  if(e.key === "Enter"){ e.preventDefault(); apiKeyInput.blur(); }
 });
 
 testCues.addEventListener("click", function(){
@@ -623,8 +653,23 @@ function clearResults(){ setVerdict("",""); setDetail(""); setStatus(""); }
 function fileToB64(f){
   return new Promise(function(res,rej){
     var r = new FileReader();
-    r.onload = function(){ res(r.result.split(",")[1]); };
-    r.onerror = rej; r.readAsDataURL(f);
+    r.onload = function(){
+      var img = new Image();
+      img.onload = function(){
+        var maxW = 1400, sc = img.width > maxW ? maxW/img.width : 1;
+        var c = document.createElement("canvas");
+        c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+        c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+        try{ res(c.toDataURL("image/jpeg",0.88).split(",")[1]); }
+        catch(e){ rej(new Error("Could not read that image. Try a screenshot saved as JPEG or PNG.")); }
+      };
+      img.onerror = function(){
+        rej(new Error("That image format is not supported. Take a screenshot, or save the photo as JPEG."));
+      };
+      img.src = r.result;
+    };
+    r.onerror = rej;
+    r.readAsDataURL(f);
   });
 }
 
@@ -640,8 +685,10 @@ function callClaude(blocks, maxTokens, modelOverride){
                          messages:[{role:"user",content:blocks}]})
   }).then(function(res){
     if(!res.ok){
-      return res.text().then(function(){
-        var m = "Something went wrong ("+res.status+").";
+      return res.text().then(function(raw){
+        var api = "";
+        try{ var p = JSON.parse(raw); api = (p.error && p.error.message) ? p.error.message : ""; }catch(e){}
+        var m = "Something went wrong ("+res.status+")." + (api ? " " + api : "");
         if(res.status===401) m = "Access code rejected. Check it in Settings.";
         else if(res.status===429) m = "Too many requests. Wait a few minutes and try again.";
         else if(res.status>=500) m = "The service is busy. Try again in a moment.";
@@ -679,7 +726,7 @@ parseRide.addEventListener("click", function(){
   parsedEcho.textContent = ""; confirmRow.hidden = true;
 
   var p = file ? fileToB64(file).then(function(b64){
-        return [{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}},
+        return [{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
                 {type:"text",text:PARSE_PROMPT + (txt?(" Extra context: "+txt):"")}];
       })
     : Promise.resolve([{type:"text",text:PARSE_PROMPT+" Description: "+txt}]);
