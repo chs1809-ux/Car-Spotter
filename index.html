@@ -4,164 +4,75 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Car Spotter</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e0f12">
+<link rel="apple-touch-icon" href="icon-180.png">
 <style>
   :root {
-    --bg: #0e0f12;
-    --card: #17181c;
-    --accent: #4a90e2;
-    --ok: #3ecf7e;
-    --bad: #e05a5a;
-    --warn: #e0b23e;
-    --text: #f2f2f2;
-    --muted: #a7a9ad;
-    --radius: 14px;
-    --toolbar-h: 96px;
-    --header-h: 56px;
+    --bg:#0e0f12; --card:#17181c; --accent:#4a90e2;
+    --ok:#3ecf7e; --maybe:#8fd0ff; --warn:#e0b23e; --bad:#e05a5a;
+    --text:#f2f2f2; --muted:#a7a9ad; --radius:14px;
+    --toolbar-h:96px; --header-h:56px;
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    line-height: 1.4;
-  }
-  .app-header {
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: var(--header-h);
-    padding: 0 10px;
-    background: #101115;
-    border-bottom: 1px solid #26282e;
-  }
-  .app-header h1 {
-    flex: 1;
-    text-align: center;
-    font-size: 1.15rem;
-    margin: 0;
-  }
-  .icon-btn {
-    background: transparent;
-    color: var(--accent);
-    min-height: 40px;
-    min-width: 64px;
-    padding: 8px 10px;
-    font-size: 0.92rem;
-    flex: 0 0 auto;
-  }
-  .icon-btn[hidden] { visibility: hidden; display: block !important; } /* keep layout balance when hidden */
-
-  main { max-width: 560px; margin: 0 auto; padding: 16px 16px 40px; }
-  .tagline { color: var(--muted); margin: 0 0 18px; font-size: 0.9rem; }
-  h2 { font-size: 1.15rem; margin: 0 0 4px; }
-  .card {
-    background: var(--card);
-    border-radius: var(--radius);
-    padding: 18px;
-    margin-bottom: 16px;
-  }
-  label { display: block; margin: 14px 0 6px; font-weight: 600; }
-  input[type=text], input[type=password], textarea, select {
-    width: 100%;
-    padding: 12px;
-    font-size: 1rem;
-    border-radius: 10px;
-    border: 1px solid #33343a;
-    background: #0e0f12;
-    color: var(--text);
-  }
-  textarea { min-height: 80px; resize: vertical; }
-  input[type=file] { width: 100%; padding: 10px 0; color: var(--text); }
-  input[type=checkbox] { width: 26px; height: 26px; accent-color: var(--accent); flex: 0 0 auto; }
-  button {
-    font: inherit;
-    border: none;
-    border-radius: 12px;
-    padding: 14px 18px;
-    cursor: pointer;
-  }
-  button.primary {
-    background: var(--accent);
-    color: #fff;
-    width: 100%;
-    font-size: 1.1rem;
-    min-height: 60px;
-    margin-top: 14px;
-  }
-  button.secondary {
-    background: #24262c;
-    color: var(--text);
-    width: 100%;
-    min-height: 54px;
-    margin-top: 10px;
-  }
-  button.on { background: var(--ok); color: #06210f; }
-  button.live-on { background: var(--ok); color: #06210f; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-    outline: 3px solid #fff;
-    outline-offset: 2px;
-  }
-
-  .checkbox-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
-  .checkbox-row label { margin: 0; flex: 1; font-weight: 400; }
-
-  .segmented-choice { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
-  .segmented-choice button {
-    background: #0e0f12;
-    border: 1px solid #33343a;
-    min-height: 76px;
-    text-align: left;
-    padding: 14px 16px;
-  }
-  .segmented-choice button .choice-title { display: block; font-size: 1.05rem; font-weight: 700; }
-  .segmented-choice button .choice-sub { display: block; color: var(--muted); font-size: 0.85rem; margin-top: 2px; font-weight: 400; }
-
-  .hint { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
-  video { width: 100%; border-radius: var(--radius); background: #000; margin-top: 14px; aspect-ratio: 4/3; object-fit: cover; }
-
-  #result { font-size: 1.15rem; font-weight: 700; margin-top: 14px; min-height: 1.4em; }
-  #result.match { color: var(--ok); }
-  #result.mismatch { color: var(--bad); }
-  #result.uncertain { color: var(--warn); }
-  #result.error { color: var(--bad); }
-  #status { color: var(--muted); margin-top: 6px; min-height: 1.2em; }
-  #parsedEcho { margin-top: 10px; font-weight: 600; }
-
-  .screen { display: block; }
-  .screen[hidden] { display: none !important; }
-  [hidden] { display: none !important; }
-  .visually-hidden {
-    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
-  }
-  .row { display: flex; gap: 10px; margin-top: 10px; }
-  .row > button { flex: 1; }
-
-  #scanScreen { padding-bottom: calc(var(--toolbar-h) + 10px); }
-
-  #actionBar {
-    position: fixed;
-    left: 0; right: 0; bottom: 0;
-    display: flex;
-    gap: 8px;
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
-    background: #101115;
-    border-top: 1px solid #26282e;
-    z-index: 20;
-  }
-  #actionBar button {
-    flex: 1;
-    margin-top: 0;
-    min-height: 66px;
-    font-size: 0.82rem;
-    padding: 8px 6px;
-    line-height: 1.2;
-  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);line-height:1.4;
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .app-header{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:8px;
+    height:var(--header-h);padding:0 10px;background:#101115;border-bottom:1px solid #26282e}
+  .app-header h1{flex:1;text-align:center;font-size:1.15rem;margin:0}
+  .icon-btn{background:transparent;color:var(--accent);min-height:44px;min-width:66px;
+    padding:8px 10px;font-size:.92rem;flex:0 0 auto;border:none;border-radius:10px;cursor:pointer}
+  .icon-btn[hidden]{visibility:hidden;display:block!important}
+  main{max-width:560px;margin:0 auto;padding:16px 16px 40px}
+  .tagline{color:var(--muted);margin:0 0 18px;font-size:.9rem}
+  h2{font-size:1.15rem;margin:0 0 4px}
+  h3{font-size:.95rem;margin:18px 0 4px;color:var(--muted)}
+  .card{background:var(--card);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+  label{display:block;margin:14px 0 6px;font-weight:600}
+  input[type=text],input[type=password],textarea,select{width:100%;padding:12px;font-size:1rem;
+    border-radius:10px;border:1px solid #33343a;background:#0e0f12;color:var(--text)}
+  textarea{min-height:80px;resize:vertical}
+  input[type=file]{width:100%;padding:10px 0;color:var(--text)}
+  input[type=checkbox]{width:26px;height:26px;accent-color:var(--accent);flex:0 0 auto}
+  button{font:inherit;border:none;border-radius:12px;padding:14px 18px;cursor:pointer}
+  button.primary{background:var(--accent);color:#fff;width:100%;font-size:1.1rem;min-height:60px;margin-top:14px}
+  button.secondary{background:#24262c;color:var(--text);width:100%;min-height:54px;margin-top:10px}
+  button.on{background:var(--ok);color:#06210f}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,
+  textarea:focus-visible,[role=dialog]:focus-visible{outline:3px solid #fff;outline-offset:2px}
+  .choice{display:flex;flex-direction:column;gap:12px;margin-top:6px}
+  .choice button{background:#0e0f12;border:1px solid #33343a;min-height:76px;text-align:left;padding:14px 16px}
+  .choice .t{display:block;font-size:1.05rem;font-weight:700}
+  .choice .s{display:block;color:var(--muted);font-size:.85rem;margin-top:2px;font-weight:400}
+  .hint{color:var(--muted);font-size:.85rem;margin-top:8px}
+  .checkbox-row{display:flex;align-items:center;gap:10px;margin-top:16px}
+  .checkbox-row label{margin:0;flex:1;font-weight:400}
+  video{width:100%;border-radius:var(--radius);background:#000;margin-top:14px;aspect-ratio:4/3;object-fit:cover}
+  #verdict{font-size:1.2rem;font-weight:700;margin-top:14px;min-height:1.4em}
+  #verdict.match{color:var(--ok)} #verdict.potential{color:var(--maybe)}
+  #verdict.uncertain{color:var(--warn)} #verdict.mismatch{color:var(--bad)}
+  #verdict.error{color:var(--bad)}
+  #detailLive,#detailStatic{color:var(--muted);margin-top:6px;min-height:1.2em}
+  #status{color:var(--muted);margin-top:6px;min-height:1.2em;font-size:.9rem}
+  #parsedEcho{margin-top:10px;font-weight:600}
+  .screen[hidden],[hidden]{display:none!important}
+  .row{display:flex;gap:10px;margin-top:10px}
+  .row>button{flex:1}
+  #scanScreen{padding-bottom:calc(var(--toolbar-h) + 10px)}
+  #actionBar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
+    background:#101115;border-top:1px solid #26282e;z-index:20}
+  #actionBar button{flex:1;margin-top:0;min-height:66px;font-size:.82rem;padding:8px 6px;line-height:1.2}
+  #dialogBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:50;
+    display:flex;align-items:center;justify-content:center;padding:20px}
+  #matchDialog{background:var(--card);border-radius:18px;padding:22px;max-width:460px;width:100%;
+    border:2px solid var(--ok)}
+  #dlgVerdict{font-size:1.35rem;font-weight:800;color:var(--ok);margin:0 0 8px}
+  #dlgDetail{color:var(--text);margin:0 0 6px}
+  #dlgExtra{color:var(--muted);font-size:.9rem;margin:0}
+  #matchDialog button{width:100%;min-height:64px;margin-top:12px}
 </style>
 </head>
 <body>
@@ -170,74 +81,92 @@
   <h1>Car Spotter</h1>
   <button id="headerSettings" class="icon-btn">Settings</button>
 </div>
+
 <main>
   <p class="tagline">Identify a private-hire car, or confirm it's the one you booked.</p>
 
-  <!-- SETUP -->
+  <!-- ================= SETTINGS ================= -->
   <section id="setupScreen" class="screen card" aria-labelledby="setup-h">
-    <h2 id="setup-h" tabindex="-1">Set up</h2>
-    <label for="apiKey">Anthropic API key</label>
-    <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
-    <label for="modelSel">Model</label>
+    <h2 id="setup-h" tabindex="-1">Settings</h2>
+    <p class="hint" id="settingsNote">Changes are saved when you go back.</p>
+
+    <label for="apiKey">Access code</label>
+    <input type="password" id="apiKey" autocomplete="off" spellcheck="false"
+           placeholder="e.g. hongsen-4821" aria-describedby="key-hint">
+    <p class="hint" id="key-hint">Shared with Spotter on this device. Your Anthropic key stays on the server; this code only unlocks it.</p>
+
+    <label for="modelSel">Model for confirming</label>
     <select id="modelSel">
-      <option value="claude-sonnet-5">Sonnet 5 (more accurate)</option>
-      <option value="claude-haiku-4-5-20251001">Haiku 4.5 (faster, cheaper — good for Live mode)</option>
+      <option value="claude-sonnet-5">Sonnet 5 (recommended)</option>
+      <option value="claude-haiku-4-5-20251001">Haiku 4.5 (cheaper, less accurate on plates)</option>
     </select>
+    <p class="hint">Guidance mode always uses Haiku, since it only needs to judge orientation.</p>
+
+    <label for="styleSel">Output style</label>
+    <select id="styleSel">
+      <option value="standard">Standard — full spoken detail</option>
+      <option value="minimal">Minimalistic — results only</option>
+    </select>
+    <p class="hint" id="styleHint"></p>
 
     <label for="lensSel">Camera lens</label>
-    <select id="lensSel">
-      <option value="">Automatic (default rear camera)</option>
-    </select>
+    <select id="lensSel"><option value="">Automatic (default rear camera)</option></select>
     <button id="detectLenses" class="secondary" type="button">Detect available lenses</button>
-    <p class="hint" id="lensHint">Detecting will briefly request camera access to list your device's lenses. Support for choosing a specific lens (e.g. telephoto) varies by device — treat it as best-effort.</p>
+    <p class="hint" id="lensHint">Detecting briefly requests camera access to list your lenses. Choosing a specific lens is best-effort; support varies by device.</p>
 
     <div class="checkbox-row">
       <input type="checkbox" id="ttsToggle">
       <label for="ttsToggle">Also speak results aloud (TTS)</label>
     </div>
-    <p class="hint">Adds spoken audio on top of your screen reader — useful if VoiceOver isn't running, or you're holding the phone out for someone else to use.</p>
+    <div class="checkbox-row">
+      <input type="checkbox" id="soundToggle" checked>
+      <label for="soundToggle">Play sound cues</label>
+    </div>
+    <p class="hint">Sound cues may be silenced by the iPhone ring/silent switch. Test with the button below.</p>
+
+    <button id="testCues" class="secondary" type="button">Play all four sound cues</button>
 
     <button id="saveKey" class="primary">Save and continue</button>
-    <button id="backFromSetup" class="secondary" hidden type="button">Back without saving</button>
-    <p class="hint">Your key stays in this browser on this device and is only sent to Anthropic's API when you scan or parse. It is never stored in the file itself.</p>
+    <p class="hint">Photos are sent to a proxy server for recognition and are not stored anywhere. No Anthropic key is kept in this browser. Booking screenshots often show your driver's name and number, so only the vehicle details are read from them.</p>
+    <p class="hint" id="versionLine">Car Spotter version 2.0.0</p>
   </section>
 
-  <!-- MODE SELECT -->
+  <!-- ================= MODE ================= -->
   <section id="modeScreen" class="screen card" aria-labelledby="mode-h" hidden>
     <h2 id="mode-h" tabindex="-1">What do you need?</h2>
-    <div class="segmented-choice">
+    <div class="choice">
       <button id="modeConfirm">
-        <span class="choice-title">Confirm my ride</span>
-        <span class="choice-sub">You already booked a car and want to check it's the right one</span>
+        <span class="t">Confirm my ride</span>
+        <span class="s">You booked a car and want to check it's the right one</span>
       </button>
       <button id="modeOpen">
-        <span class="choice-title">Identify a car</span>
-        <span class="choice-sub">No booking details — just find out what car this is</span>
+        <span class="t">Identify a car</span>
+        <span class="s">No booking details — just find out what car this is</span>
       </button>
     </div>
   </section>
 
-  <!-- MODE A: INTAKE -->
+  <!-- ================= INTAKE ================= -->
   <section id="intakeScreen" class="screen card" aria-labelledby="intake-h" hidden>
     <h2 id="intake-h" tabindex="-1">Your ride details</h2>
-    <p class="hint">Type or dictate a description, or upload a screenshot of your booking screen. Only the vehicle details are kept; the image is discarded after reading.</p>
+    <p class="hint">Type or dictate a description, or upload a screenshot of your booking. Only the vehicle details are kept; the image is discarded after reading.</p>
 
-    <label for="rideText">Describe the car (optional if uploading a screenshot)</label>
+    <label for="rideText">Describe the car</label>
     <textarea id="rideText" placeholder="e.g. black Toyota Camry, plate SKX1234A"></textarea>
 
-    <label for="rideShot">Or upload a screenshot of your booking</label>
+    <label for="rideShot">Or upload a booking screenshot</label>
     <input type="file" id="rideShot" accept="image/*">
 
     <button id="parseRide" class="primary">Get ride details</button>
 
     <div id="parsedEcho" role="status" aria-live="assertive" aria-atomic="true"></div>
     <div class="row" id="confirmRow" hidden>
-      <button id="confirmRide" class="primary" style="margin-top:0;">Confirm, this is correct</button>
-      <button id="editRide" class="secondary" style="margin-top:0;">Try again</button>
+      <button id="confirmRide" class="primary" style="margin-top:0">Confirm, this is correct</button>
+      <button id="editRide" class="secondary" style="margin-top:0">Try again</button>
     </div>
   </section>
 
-  <!-- SCAN -->
+  <!-- ================= SCAN ================= -->
   <section id="scanScreen" class="screen" aria-labelledby="scan-h" hidden>
     <div class="card">
       <h2 id="scan-h" tabindex="-1">Scan</h2>
@@ -246,582 +175,856 @@
 
       <video id="video" playsinline autoplay muted aria-hidden="true"></video>
 
-      <div id="result" role="status" aria-live="assertive" aria-atomic="true"></div>
-      <div id="status" role="status" aria-live="polite" aria-atomic="true"></div>
+      <!-- Region A: assertive. Verdict only, never repeats Region B. -->
+      <div id="verdict" role="status" aria-live="assertive" aria-atomic="true"></div>
+      <!-- Region B, Standard style: polite live -->
+      <div id="detailLive" role="status" aria-live="polite" aria-atomic="true"></div>
+      <!-- Region B, Minimalistic style: never announces, navigate to it -->
+      <h3 id="detailsHeading" hidden>Details</h3>
+      <div id="detailStatic"></div>
+
+      <div id="status"></div>
     </div>
   </section>
 
   <div id="actionBar" hidden>
     <button id="startCam" class="secondary">Start camera</button>
     <button id="identifyBtn" class="secondary" disabled>Identify</button>
-    <button id="liveBtn" class="secondary" disabled>Start Live mode</button>
+    <button id="liveBtn" class="secondary" disabled>Start Live</button>
   </div>
 </main>
 
-<canvas id="canvas" style="display:none;"></canvas>
+<!-- ================= MATCH DIALOG ================= -->
+<div id="dialogBackdrop" hidden>
+  <div id="matchDialog" role="dialog" aria-modal="true"
+       aria-labelledby="dlgVerdict" aria-describedby="dlgDetail" tabindex="-1">
+    <p id="dlgVerdict">Match</p>
+    <p id="dlgDetail"></p>
+    <p id="dlgExtra"></p>
+    <button id="dlgGuidance" class="primary">Start guidance mode</button>
+    <button id="dlgDismiss" class="secondary">Dismiss</button>
+  </div>
+</div>
+
+<canvas id="canvas" style="display:none"></canvas>
 
 <script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js")["catch"](function(){});
+  });
+}
 (function () {
-  "use strict";
+"use strict";
 
-  var KEY_STORE = "carspotter_key";
-  var MODEL_STORE = "carspotter_model";
-  var LENS_STORE = "carspotter_lens";
-  var TTS_STORE = "carspotter_tts";
+/* =======================================================================
+   STORAGE
+   ======================================================================= */
+/* Car Spotter has its own Worker and its own access codes, so it keeps a
+   fully separate namespace. Sharing spotter.accessCode would hand this app
+   a code that its proxy will reject. */
+var NS = "carspotter.";
+var K = {key:NS+"accessCode", model:NS+"model", speak:NS+"speak", cam:NS+"cam",
+         style:NS+"style", sound:NS+"sound"};
+var PROXY_URL = "https://car-spotter-proxy.chs1809.workers.dev";
+var MAX_TOKENS = 400;   // the Worker caps at 400; asking for more is silently clamped
 
-  function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-  function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function sget(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
+function sset(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
+function sdel(k){ try{localStorage.removeItem(k);}catch(e){} }
 
-  var screens = {
-    setup: document.getElementById("setupScreen"),
-    mode: document.getElementById("modeScreen"),
-    intake: document.getElementById("intakeScreen"),
-    scan: document.getElementById("scanScreen")
-  };
-  var actionBar = document.getElementById("actionBar");
-  var headerBack = document.getElementById("headerBack");
-  var headerSettings = document.getElementById("headerSettings");
+/* One-time cleanup: earlier builds stored a raw Anthropic key in this
+   browser. It is no longer used and should not be left lying around. */
+(function purgeOldSecrets(){
+  ["carspotter_key","cs_key"].forEach(sdel);
+  var old = {carspotter_tts:K.speak, cs_tts:K.speak, carspotter_lens:K.cam, cs_lens:K.cam};
+  Object.keys(old).forEach(function(o){
+    var v = sget(o);
+    if(v !== null && sget(old[o]) === null) sset(old[o], v);
+    sdel(o);
+  });
+})();
 
-  var currentScreen = "setup";
-  var settingsReturnScreen = null;
-
-  function showScreen(name) {
-    Object.keys(screens).forEach(function (k) {
-      screens[k].hidden = (k !== name);
-    });
-    currentScreen = name;
-    actionBar.hidden = (name !== "scan");
-    headerSettings.hidden = (name === "setup");
-    headerBack.hidden = !(name === "intake" || name === "scan");
-    var heading = screens[name].querySelector("h2");
-    if (heading) {
-      window.setTimeout(function () { heading.focus(); }, 30);
+/* An access code can arrive as ?code=... so testers tap a link instead of
+   typing it. Removed from the URL straight away so it does not sit in
+   history or get passed on in a referrer. */
+(function codeFromLink(){
+  try{
+    var m = location.search.match(/[?&]code=([^&]*)/);
+    if(m && m[1]){
+      var c = decodeURIComponent(m[1].replace(/\+/g," ")).trim();
+      if(c) sset(K.key, c);
+      if(history.replaceState) history.replaceState(null, "", location.pathname + location.hash);
     }
-    window.scrollTo(0, 0);
+  }catch(e){}
+})();
+
+/* =======================================================================
+   AUDIO ENGINE
+   Ports the agreed cue design. Two families sharing a bass pedal:
+     positive  pedal D3   Match G4-B4-D5   Potential G4-B4
+     negative  pedal A2   Uncertain E4     Mismatch A4-E4
+   Bells use stretched inharmonic ratios so they ring instead of fusing
+   into an organ tone. Stereo comes from decorrelated reverb plus gentle
+   panning that follows the melodic direction.
+   ======================================================================= */
+var SRATE = 44100;
+var actx = null, irBuf = null, cueCache = {};
+var NOTES = {G4:392.00,B4:493.88,D5:587.33,E4:329.63,A4:440.00,D3:146.83,A2:110.00};
+var RATIOS = [[1.00,1.00,1.00],[2.02,0.56,0.70],[3.04,0.38,0.54],[4.09,0.30,0.46],
+              [5.43,0.21,0.36],[6.81,0.15,0.28],[8.21,0.10,0.22],[10.9,0.07,0.16],
+              [13.4,0.04,0.11]];
+
+function rng(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0;
+  var t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296*2-1; }; }
+
+function ctx(){ if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); return actx; }
+
+function envShape(n, attackMs, tau){
+  var a = Math.max(1, Math.min(n, Math.round(SRATE*attackMs/1000)));
+  var e = new Float32Array(n), i;
+  for(i=0;i<a;i++) e[i] = (1 - Math.cos(Math.PI*i/(a-1||1)))/2;
+  for(i=a;i<n;i++) e[i] = Math.exp(-((i-a)/SRATE)/tau);
+  var tail = Math.min(Math.round(SRATE*0.05), n);
+  for(i=0;i<tail;i++) e[n-tail+i] *= (1 + Math.cos(Math.PI*i/(tail-1||1)))/2;
+  return e;
+}
+
+function ringVoice(freq, dur, damp){
+  var n = Math.round(SRATE*dur), sig = new Float32Array(n), i, k, mx = 0;
+  for(k=0;k<RATIOS.length;k++){
+    var r = RATIOS[k][0], lvl = RATIOS[k][1]*Math.pow(damp, r-1), dec = RATIOS[k][2];
+    var w = 2*Math.PI*freq*r/SRATE, tau = dur*dec*0.80;
+    for(i=0;i<n;i++) sig[i] += lvl*Math.sin(w*i)*Math.exp(-(i/SRATE)/tau);
   }
+  var env = envShape(n, 5, dur*0.66);
+  for(i=0;i<n;i++){ sig[i]*=env[i]; if(Math.abs(sig[i])>mx) mx=Math.abs(sig[i]); }
+  if(mx>0) for(i=0;i<n;i++) sig[i]/=mx;
+  return sig;
+}
 
-  var apiKeyInput = document.getElementById("apiKey");
-  var modelSel = document.getElementById("modelSel");
-  var lensSel = document.getElementById("lensSel");
-  var lensHint = document.getElementById("lensHint");
-  var detectLenses = document.getElementById("detectLenses");
-  var ttsToggle = document.getElementById("ttsToggle");
-  var saveKey = document.getElementById("saveKey");
-  var backFromSetup = document.getElementById("backFromSetup");
-
-  var modeConfirmBtn = document.getElementById("modeConfirm");
-  var modeOpenBtn = document.getElementById("modeOpen");
-
-  var rideText = document.getElementById("rideText");
-  var rideShot = document.getElementById("rideShot");
-  var parseRide = document.getElementById("parseRide");
-  var parsedEcho = document.getElementById("parsedEcho");
-  var confirmRow = document.getElementById("confirmRow");
-  var confirmRideBtn = document.getElementById("confirmRide");
-  var editRideBtn = document.getElementById("editRide");
-  var editRideFromScan = document.getElementById("editRideFromScan");
-
-  var expectedSummary = document.getElementById("expectedSummary");
-  var startCam = document.getElementById("startCam");
-  var video = document.getElementById("video");
-  var canvas = document.getElementById("canvas");
-  var identifyBtn = document.getElementById("identifyBtn");
-  var liveBtn = document.getElementById("liveBtn");
-  var resultEl = document.getElementById("result");
-  var statusEl = document.getElementById("status");
-
-  var mode = "confirm"; // "confirm" | "open"
-  var expected = null; // {plate, colour, brand, model}
-  var stream = null;
-  var busy = false;
-  var liveTimer = null;
-  var LIVE_INTERVAL_MS = 4500;
-  var ttsEnabled = false;
-
-  function showResult(text, cls) {
-    resultEl.className = cls || "";
-    resultEl.textContent = text;
-    speak(text);
+function bassVoice(freq, dur){
+  var n = Math.round(SRATE*dur), sig = new Float32Array(n), i, mx = 0;
+  var w = 2*Math.PI*freq/SRATE, w2 = w*(1.0022);
+  for(i=0;i<n;i++){
+    var t = i/SRATE;
+    sig[i] = Math.sin(w*i) + 0.62*Math.sin(w2*i)
+           + 0.30*Math.sin(2*w*i)*Math.exp(-t/(dur*0.26))
+           + 0.13*Math.sin(3*w*i)*Math.exp(-t/(dur*0.13))
+           + 0.20*Math.sin(2*Math.PI*118*t)*(1-Math.exp(-t/0.018))*Math.exp(-t/0.22)
+           + 0.11*Math.sin(2*Math.PI*196*t)*(1-Math.exp(-t/0.018))*Math.exp(-t/0.15);
   }
-  function setStatus(text) { statusEl.textContent = text; }
+  var env = envShape(n, 22, dur*0.30);
+  for(i=0;i<n;i++){ sig[i]*=env[i]; if(Math.abs(sig[i])>mx) mx=Math.abs(sig[i]); }
+  if(mx>0) for(i=0;i<n;i++) sig[i]/=mx;
+  return sig;
+}
 
-  /* ---------- TTS ---------- */
-  function speak(text) {
-    if (!ttsEnabled || !text) return;
-    if (!("speechSynthesis" in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      var u = new SpeechSynthesisUtterance(text);
-      window.speechSynthesis.speak(u);
-    } catch (e) {}
+function makeIR(){
+  if(irBuf) return irBuf;
+  var c = ctx(), dur = 1.15, n = Math.round(c.sampleRate*dur);
+  var b = c.createBuffer(2, n, c.sampleRate);
+  for(var ch=0; ch<2; ch++){
+    var d = b.getChannelData(ch), r = rng(ch===0?53:97), prev = 0;
+    for(var i=0;i<n;i++){
+      var v = r()*Math.exp(-(i/c.sampleRate)/0.25);
+      prev = prev + 0.45*(v-prev);            // gentle lowpass on the tail
+      d[i] = prev;
+    }
+    [[7,0.30],[14,0.22],[23,0.15],[34,0.10]].forEach(function(er){
+      var idx = Math.round(c.sampleRate*er[0]/1000); if(idx<n) d[idx] += er[1];
+    });
+    for(var j=0;j<Math.round(c.sampleRate*0.005);j++) d[j] *= j/(c.sampleRate*0.005);
   }
+  irBuf = b; return b;
+}
 
-  /* ---------- audio + haptic cues ---------- */
-  var audioCtx = null;
-  function ctx() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    return audioCtx;
-  }
-  function tone(freq, dur, delay, type) {
+function panGains(p){ var a = (p+1)*Math.PI/4; return [Math.cos(a), Math.sin(a)]; }
+
+/* entries: [kind, freq, startSec, durSec, amp, pan]  kind: b=bass r=ring d=dullring */
+function renderCue(entries, total, target){
+  var c = ctx(), n = Math.round(c.sampleRate*total);
+  var buf = c.createBuffer(2, n, c.sampleRate);
+  var L = buf.getChannelData(0), R = buf.getChannelData(1);
+  entries.forEach(function(e){
+    var kind=e[0], freq=e[1], start=e[2], dur=e[3], amp=e[4], pan=e[5];
+    var seg = kind==="b" ? bassVoice(freq,dur) : ringVoice(freq,dur, kind==="d"?0.88:1.0);
+    var g = panGains(pan), s = Math.round(c.sampleRate*start);
+    for(var i=0;i<seg.length && s+i<n;i++){
+      L[s+i] += seg[i]*amp*g[0];
+      R[s+i] += seg[i]*amp*g[1];
+    }
+  });
+  var mx=0,i;
+  for(i=0;i<n;i++){ if(Math.abs(L[i])>mx)mx=Math.abs(L[i]); if(Math.abs(R[i])>mx)mx=Math.abs(R[i]); }
+  if(mx>0) for(i=0;i<n;i++){ L[i]=L[i]/mx*target; R[i]=R[i]/mx*target; }
+  return buf;
+}
+
+var CUES = {
+  match: function(){ return renderCue([
+    ["b",NOTES.D3,0.000,1.60,0.26, 0.00],
+    ["r",NOTES.G4,0.000,1.35,0.80,-0.30],
+    ["r",NOTES.B4,0.150,1.35,0.86, 0.00],
+    ["r",NOTES.D5,0.300,1.80,1.00, 0.30]], 2.20, 0.88); },
+  potential: function(){ return renderCue([
+    ["b",NOTES.D3,0.000,1.45,0.26, 0.00],
+    ["r",NOTES.G4,0.000,1.35,0.80,-0.30],
+    ["r",NOTES.B4,0.150,1.65,0.90, 0.05]], 1.95, 0.72); },
+  uncertain: function(){ return renderCue([
+    ["b",NOTES.A2,0.000,1.30,0.22, 0.00],
+    ["r",NOTES.E4,0.000,1.55,0.80, 0.00]], 1.75, 0.56); },
+  mismatch: function(){ return renderCue([
+    ["b",NOTES.A2,0.000,1.15,0.20, 0.00],
+    ["d",NOTES.A4,0.000,0.85,0.74, 0.26],
+    ["d",NOTES.E4,0.185,1.20,0.86,-0.26]], 1.50, 0.46); }
+};
+
+var VIBES = { match:[90], potential:[70,60,70], uncertain:[180], mismatch:[60,50,60,50,60] };
+
+function playCue(name){
+  if(sget(K.sound) === "0") return;
+  try{
     var c = ctx();
-    var osc = c.createOscillator();
-    var gain = c.createGain();
-    osc.type = type || "sine";
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.0001, c.currentTime + (delay || 0));
-    gain.gain.linearRampToValueAtTime(0.2, c.currentTime + (delay || 0) + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + (delay || 0) + dur);
-    osc.connect(gain).connect(c.destination);
-    osc.start(c.currentTime + (delay || 0));
-    osc.stop(c.currentTime + (delay || 0) + dur + 0.05);
-  }
-  function cueMatch() {
-    tone(660, 0.12, 0, "sine");
-    tone(880, 0.16, 0.1, "sine");
-    if (navigator.vibrate) navigator.vibrate([90]);
-  }
-  function cueMismatch() {
-    tone(220, 0.18, 0, "square");
-    tone(180, 0.2, 0.16, "square");
-    if (navigator.vibrate) navigator.vibrate([90, 60, 90]);
-  }
-  function cueUncertain() {
-    tone(440, 0.25, 0, "triangle");
-    if (navigator.vibrate) navigator.vibrate([180]);
-  }
+    if(c.state === "suspended") c.resume();
+    if(!cueCache[name]) cueCache[name] = CUES[name]();
+    var src = c.createBufferSource(); src.buffer = cueCache[name];
+    var dry = c.createGain(), wet = c.createGain(), conv = c.createConvolver();
+    conv.buffer = makeIR();
+    dry.gain.value = 0.74; wet.gain.value = 0.28;
+    src.connect(dry).connect(c.destination);
+    src.connect(conv).connect(wet).connect(c.destination);
+    src.start();
+  }catch(e){}
+  if(navigator.vibrate && VIBES[name]){ try{ navigator.vibrate(VIBES[name]); }catch(e){} }
+}
 
-  /* ---------- setup ---------- */
-  function loadSettingsIntoForm() {
-    var key = safeGet(KEY_STORE);
-    var model = safeGet(MODEL_STORE);
-    var lens = safeGet(LENS_STORE);
-    var tts = safeGet(TTS_STORE);
-    if (key) apiKeyInput.value = key;
-    if (model) {
-      var validOption = Array.prototype.some.call(modelSel.options, function (o) { return o.value === model; });
-      if (validOption) modelSel.value = model;
-      else safeSet(MODEL_STORE, modelSel.value);
-    }
-    if (lens) {
-      var lensExists = Array.prototype.some.call(lensSel.options, function (o) { return o.value === lens; });
-      if (lensExists) lensSel.value = lens;
-    }
-    ttsToggle.checked = (tts === "1");
-    ttsEnabled = ttsToggle.checked;
-  }
+/* =======================================================================
+   SCREENS
+   ======================================================================= */
+var screens = {
+  setup: document.getElementById("setupScreen"),
+  mode: document.getElementById("modeScreen"),
+  intake: document.getElementById("intakeScreen"),
+  scan: document.getElementById("scanScreen")
+};
+var actionBar = document.getElementById("actionBar");
+var headerBack = document.getElementById("headerBack");
+var headerSettings = document.getElementById("headerSettings");
+var current = "setup", settingsReturn = null;
 
-  (function init() {
-    loadSettingsIntoForm();
-    if (safeGet(KEY_STORE)) {
-      showScreen("mode");
-    } else {
-      showScreen("setup");
-    }
+function show(name){
+  Object.keys(screens).forEach(function(k){ screens[k].hidden = (k !== name); });
+  current = name;
+  actionBar.hidden = (name !== "scan");
+  headerSettings.hidden = (name === "setup");
+  var firstRun = !sget(K.key);
+  headerBack.hidden = !(name === "intake" || name === "scan" || (name === "setup" && !firstRun));
+  if(name === "setup"){
+    saveKey.hidden = !firstRun;
+    settingsNote.hidden = firstRun;
+  }
+  var h = screens[name].querySelector("h2");
+  if(h) setTimeout(function(){ h.focus(); }, 30);
+  window.scrollTo(0,0);
+}
+
+/* =======================================================================
+   ELEMENTS
+   ======================================================================= */
+var $ = function(id){ return document.getElementById(id); };
+var apiKeyInput=$("apiKey"), modelSel=$("modelSel"), styleSel=$("styleSel"), styleHint=$("styleHint"),
+    lensSel=$("lensSel"), lensHint=$("lensHint"), detectLenses=$("detectLenses"),
+    ttsToggle=$("ttsToggle"), soundToggle=$("soundToggle"), testCues=$("testCues"),
+    saveKey=$("saveKey"), settingsNote=$("settingsNote"),
+    modeConfirmBtn=$("modeConfirm"), modeOpenBtn=$("modeOpen"),
+    rideText=$("rideText"), rideShot=$("rideShot"), parseRide=$("parseRide"),
+    parsedEcho=$("parsedEcho"), confirmRow=$("confirmRow"),
+    confirmRideBtn=$("confirmRide"), editRideBtn=$("editRide"), editRideFromScan=$("editRideFromScan"),
+    expectedSummary=$("expectedSummary"), startCam=$("startCam"), video=$("video"),
+    canvas=$("canvas"), identifyBtn=$("identifyBtn"), liveBtn=$("liveBtn"),
+    verdictEl=$("verdict"), detailLive=$("detailLive"), detailStatic=$("detailStatic"),
+    detailsHeading=$("detailsHeading"), statusEl=$("status"),
+    backdrop=$("dialogBackdrop"), dialog=$("matchDialog"), dlgVerdict=$("dlgVerdict"),
+    dlgDetail=$("dlgDetail"), dlgExtra=$("dlgExtra"),
+    dlgGuidance=$("dlgGuidance"), dlgDismiss=$("dlgDismiss");
+
+/* =======================================================================
+   STATE
+   ======================================================================= */
+var mode = "confirm";          // "confirm" | "open"
+var expected = null;
+var stream = null, busy = false;
+var liveTimer = null, sessionCap = null;
+var phase = "verify";          // "verify" | "guiding"
+var guideTimer = null, guideEnds = 0, lastGuide = "";
+var noCarStreak = 0;
+var BASE_MS = 5000, MAX_MS = 12000, SESSION_MS = 5*60*1000, GUIDE_MS = 45*1000;
+var lastFocus = null;
+
+/* =======================================================================
+   OUTPUT
+   ======================================================================= */
+function minimal(){ return sget(K.style) === "minimal"; }
+
+function setVerdict(text, cls){
+  verdictEl.className = cls || "";
+  verdictEl.textContent = text;
+  speak(text);
+}
+function setDetail(text){
+  if(minimal()){
+    detailLive.textContent = "";
+    detailStatic.textContent = text || "";
+    detailsHeading.hidden = !text;
+  } else {
+    detailStatic.textContent = "";
+    detailsHeading.hidden = true;
+    detailLive.textContent = text || "";
+  }
+}
+function setStatus(t){ statusEl.textContent = t || ""; }
+
+function speak(text){
+  if(sget(K.speak) !== "1" || !text || !("speechSynthesis" in window)) return;
+  try{ window.speechSynthesis.cancel();
+       window.speechSynthesis.speak(new SpeechSynthesisUtterance(text)); }catch(e){}
+}
+
+var ORIENT = {
+  "nose-facing":"Facing you, bonnet toward you.",
+  "boot-facing":"Boot toward you.",
+  "nose-left":"Side on, nose to the left.",
+  "nose-right":"Side on, nose to the right.",
+  "unclear":""
+};
+
+/* =======================================================================
+   SETTINGS
+   ======================================================================= */
+function styleText(){
+  styleHint.textContent = styleSel.value === "minimal"
+    ? "Announces the result only. Explanations stay under Details and are never spoken over you — useful with a braille display or when you want less interruption."
+    : "Announces the result and the explanation as they arrive.";
+}
+styleSel.addEventListener("change", styleText);
+
+function loadSettings(){
+  var k=sget(K.key), m=sget(K.model), l=sget(K.cam), st=sget(K.style);
+  apiKeyInput.value = k || "";
+  if(m && Array.prototype.some.call(modelSel.options,function(o){return o.value===m;})) modelSel.value = m;
+  else if(m) sset(K.model, modelSel.value);
+  if(l && Array.prototype.some.call(lensSel.options,function(o){return o.value===l;})) lensSel.value = l;
+  if(st) styleSel.value = st;
+  ttsToggle.checked = sget(K.speak) === "1";
+  soundToggle.checked = sget(K.sound) !== "0";
+  styleText();
+}
+
+(function init(){
+  loadSettings();
+  show(sget(K.key) ? "mode" : "setup");
+})();
+
+/* Settings persist when you leave via header Back, matching Spotter.
+   The Save button only appears on first run, when there is nothing to go back to. */
+function persistSettings(){
+  var c = apiKeyInput.value.trim();
+  if(c) sset(K.key, c); else sdel(K.key);
+  sset(K.model, modelSel.value);
+  sset(K.cam, lensSel.value);
+  sset(K.style, styleSel.value);
+  sset(K.speak, ttsToggle.checked ? "1" : "0");
+  sset(K.sound, soundToggle.checked ? "1" : "0");
+}
+
+saveKey.addEventListener("click", function(){
+  var c = apiKeyInput.value.trim();
+  if(!c){ apiKeyInput.focus(); return; }
+  persistSettings();
+  show("mode");
+});
+
+function leaveSettings(){
+  persistSettings();
+  var dest = settingsReturn || "mode"; settingsReturn = null;
+  show(dest);
+  setStatus("Settings saved.");
+}
+
+headerSettings.addEventListener("click", function(){
+  if(current === "setup") return;
+  settingsReturn = current;
+  if(current === "scan"){ stopLive(); stopGuidance(); stopCamera(); }
+  loadSettings();
+  show("setup");
+});
+
+headerBack.addEventListener("click", function(){
+  if(current === "setup"){ leaveSettings(); }
+  else if(current === "intake") show("mode");
+  else if(current === "scan"){ stopLive(); stopGuidance(); stopCamera(); show("mode"); }
+});
+
+testCues.addEventListener("click", function(){
+  var seq = ["match","potential","uncertain","mismatch"], i = 0;
+  setStatus("Playing: Match, Potential match, Uncertain, Mismatch.");
+  (function next(){
+    if(i >= seq.length){ setStatus(""); return; }
+    playCue(seq[i++]); setTimeout(next, 2600);
   })();
+});
 
-  saveKey.addEventListener("click", function () {
-    var key = apiKeyInput.value.trim();
-    if (!key) { apiKeyInput.focus(); return; }
-    safeSet(KEY_STORE, key);
-    safeSet(MODEL_STORE, modelSel.value);
-    safeSet(LENS_STORE, lensSel.value);
-    safeSet(TTS_STORE, ttsToggle.checked ? "1" : "0");
-    ttsEnabled = ttsToggle.checked;
-    var dest = settingsReturnScreen || "mode";
-    settingsReturnScreen = null;
-    backFromSetup.hidden = true;
-    showScreen(dest);
-  });
-
-  backFromSetup.addEventListener("click", function () {
-    loadSettingsIntoForm(); // discard any unsaved edits
-    var dest = settingsReturnScreen || "mode";
-    settingsReturnScreen = null;
-    backFromSetup.hidden = true;
-    showScreen(dest);
-  });
-
-  headerSettings.addEventListener("click", function () {
-    if (currentScreen === "setup") return;
-    settingsReturnScreen = currentScreen;
-    if (currentScreen === "scan") {
-      stopCamera();
-      stopLive();
-    }
-    backFromSetup.hidden = false;
-    showScreen("setup");
-  });
-
-  headerBack.addEventListener("click", function () {
-    if (currentScreen === "intake") {
-      showScreen("mode");
-    } else if (currentScreen === "scan") {
-      stopCamera();
-      stopLive();
-      showScreen("mode");
-    }
-  });
-
-  /* ---------- mode switch ---------- */
-  function resetIntake() {
-    expected = null;
-    parsedEcho.textContent = "";
-    confirmRow.hidden = true;
-    rideText.value = "";
-    rideShot.value = "";
-  }
-
-  modeConfirmBtn.addEventListener("click", function () {
-    mode = "confirm";
-    resetIntake();
-    showScreen("intake");
-  });
-  modeOpenBtn.addEventListener("click", function () {
-    mode = "open";
-    resetIntake();
-    editRideFromScan.hidden = true;
-    expectedSummary.textContent = "Open identification: no prior details needed.";
-    showScreen("scan");
-  });
-
-  editRideFromScan.addEventListener("click", function () {
-    stopCamera();
-    stopLive();
-    showScreen("intake");
-  });
-
-  /* ---------- helpers ---------- */
-  function fileToBase64(file) {
-    return new Promise(function (resolve, reject) {
-      var reader = new FileReader();
-      reader.onload = function () { resolve(reader.result.split(",")[1]); };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+detectLenses.addEventListener("click", function(){
+  lensHint.textContent = "Detecting cameras...";
+  navigator.mediaDevices.getUserMedia({video:true}).then(function(s){
+    s.getTracks().forEach(function(t){ t.stop(); });
+    return navigator.mediaDevices.enumerateDevices();
+  }).then(function(devs){
+    var v = devs.filter(function(d){ return d.kind === "videoinput"; });
+    while(lensSel.options.length > 1) lensSel.remove(1);
+    v.forEach(function(d,i){
+      var o = document.createElement("option");
+      o.value = d.deviceId; o.textContent = d.label || ("Camera "+(i+1));
+      lensSel.appendChild(o);
     });
-  }
+    var saved = sget(K.cam);
+    if(saved && Array.prototype.some.call(lensSel.options,function(o){return o.value===saved;}))
+      lensSel.value = saved;
+    lensHint.textContent = v.length ? ("Found "+v.length+" camera(s). Choose one, then save.") : "No cameras found.";
+  }).catch(function(e){
+    lensHint.textContent = "Could not list lenses: " + (e && e.message ? e.message : "unknown error");
+  });
+});
 
-  function callClaude(contentBlocks, maxTokens) {
-    var key = safeGet(KEY_STORE);
-    var model = safeGet(MODEL_STORE) || "claude-sonnet-5";
-    return fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model: model,
-        max_tokens: maxTokens || 400,
-        messages: [{ role: "user", content: contentBlocks }]
+/* =======================================================================
+   MODE
+   ======================================================================= */
+function resetIntake(){
+  expected = null; parsedEcho.textContent = ""; confirmRow.hidden = true;
+  rideText.value = ""; rideShot.value = "";
+}
+modeConfirmBtn.addEventListener("click", function(){ mode="confirm"; resetIntake(); show("intake"); });
+modeOpenBtn.addEventListener("click", function(){
+  mode="open"; resetIntake(); editRideFromScan.hidden = true;
+  expectedSummary.textContent = "Open identification — no booking details needed.";
+  clearResults(); show("scan");
+});
+editRideFromScan.addEventListener("click", function(){
+  stopLive(); stopGuidance(); stopCamera(); show("intake");
+});
+
+function clearResults(){ setVerdict("",""); setDetail(""); setStatus(""); }
+
+/* =======================================================================
+   API
+   ======================================================================= */
+function fileToB64(f){
+  return new Promise(function(res,rej){
+    var r = new FileReader();
+    r.onload = function(){ res(r.result.split(",")[1]); };
+    r.onerror = rej; r.readAsDataURL(f);
+  });
+}
+
+function callClaude(blocks, maxTokens, modelOverride){
+  var code = sget(K.key);
+  if(!code) return Promise.reject(new Error("This needs an access code. Add one in Settings."));
+  var model = modelOverride || sget(K.model) || "claude-sonnet-5";
+  return fetch(PROXY_URL + "/v1/messages", {
+    method:"POST",
+    headers:{"content-type":"application/json", "x-passcode":code},
+    body:JSON.stringify({model:model,
+                         max_tokens:Math.min(maxTokens||300, MAX_TOKENS),
+                         messages:[{role:"user",content:blocks}]})
+  }).then(function(res){
+    if(!res.ok){
+      return res.text().then(function(){
+        var m = "Something went wrong ("+res.status+").";
+        if(res.status===401) m = "Access code rejected. Check it in Settings.";
+        else if(res.status===429) m = "Too many requests. Wait a few minutes and try again.";
+        else if(res.status>=500) m = "The service is busy. Try again in a moment.";
+        throw new Error(m);
+      });
+    }
+    return res.json();
+  }).then(function(d){
+    var txt = "";
+    (d.content||[]).forEach(function(b){ if(b.type==="text") txt += b.text; });
+    try{ return JSON.parse(txt.replace(/```json/gi,"").replace(/```/g,"").trim()); }
+    catch(e){ throw new Error("Could not read the response. Try again."); }
+  }).catch(function(err){
+    var e = err || new Error("Unknown error");
+    if(/Failed to fetch|NetworkError/i.test(e.message||""))
+      e.message = "Could not reach the service. Check your connection.";
+    throw e;
+  });
+}
+
+/* =======================================================================
+   INTAKE
+   ======================================================================= */
+var PARSE_PROMPT =
+ "Extract private-hire vehicle details from a free-text description or a screenshot of a ride-booking app. "+
+ "Return ONLY minified JSON, no prose, no markdown fences: "+
+ '{"found":true|false,"plate":string|null,"colour":string|null,"brand":string|null,"model":string|null,"detail":string}. '+
+ "Use null for anything you cannot determine. Never guess a plate that is not clearly legible or stated. "+
+ "'detail' is one short sentence noting low confidence or why found is false.";
+
+parseRide.addEventListener("click", function(){
+  var txt = rideText.value.trim(), file = rideShot.files[0];
+  if(!txt && !file){ parsedEcho.textContent = "Type a description or choose a screenshot first."; return; }
+  parseRide.disabled = true; setStatus("Reading your ride details...");
+  parsedEcho.textContent = ""; confirmRow.hidden = true;
+
+  var p = file ? fileToB64(file).then(function(b64){
+        return [{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}},
+                {type:"text",text:PARSE_PROMPT + (txt?(" Extra context: "+txt):"")}];
       })
-    }).then(function (res) {
-      if (!res.ok) {
-        return res.text().then(function () {
-          var msg = "Something went wrong (" + res.status + ").";
-          if (res.status === 401) msg = "The API key was rejected. Open Settings to fix it.";
-          else if (res.status === 429) msg = "Too many requests. Wait a few seconds and try again.";
-          else if (res.status === 529 || res.status === 500) msg = "The service is busy. Try again shortly.";
-          throw new Error(msg);
-        });
-      }
-      return res.json();
-    }).then(function (data) {
-      var text = "";
-      (data.content || []).forEach(function (block) {
-        if (block.type === "text") text += block.text;
-      });
-      var cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-      try {
-        return JSON.parse(cleaned);
-      } catch (e) {
-        throw new Error("Could not read the response. Try again.");
-      }
-    });
+    : Promise.resolve([{type:"text",text:PARSE_PROMPT+" Description: "+txt}]);
+
+  p.then(function(b){ return callClaude(b,400); }).then(function(j){
+    parseRide.disabled = false;
+    if(!j.found){
+      parsedEcho.textContent = "Could not find car details. " + (j.detail||"Try again with a clearer screenshot.");
+      setStatus(""); return;
+    }
+    expected = {plate:j.plate||null, colour:j.colour||null, brand:j.brand||null, model:j.model||null};
+    parsedEcho.textContent = "Got it: " + describe(expected) + ". " + (j.detail||"");
+    confirmRow.hidden = false;
+    setStatus("Check the details, then confirm or try again.");
+  }).catch(function(e){
+    parseRide.disabled = false; parsedEcho.textContent = "Error: " + e.message; setStatus("");
+  });
+});
+
+function describe(x){
+  var p = [];
+  if(x.colour) p.push(x.colour);
+  if(x.brand) p.push(x.brand);
+  if(x.model) p.push(x.model);
+  return (p.length?p.join(" "):"car") + (x.plate ? (", plate "+x.plate) : ", plate not found");
+}
+
+editRideBtn.addEventListener("click", function(){
+  expected=null; parsedEcho.textContent=""; confirmRow.hidden=true; setStatus("");
+});
+confirmRideBtn.addEventListener("click", function(){
+  editRideFromScan.hidden = false;
+  expectedSummary.textContent = "Looking for: " + describe(expected);
+  clearResults(); show("scan");
+});
+
+/* =======================================================================
+   CAMERA
+   ======================================================================= */
+function stopCamera(){
+  if(stream){ stream.getTracks().forEach(function(t){t.stop();}); stream=null; }
+  video.srcObject = null;
+  startCam.textContent = "Start camera"; startCam.classList.remove("on");
+  identifyBtn.disabled = true; liveBtn.disabled = true;
+}
+function getStream(){
+  var lens = sget(K.cam), base = {width:{ideal:1920},height:{ideal:1440}};
+  var c = lens ? {video:Object.assign({deviceId:{exact:lens}},base),audio:false}
+               : {video:Object.assign({facingMode:{ideal:"environment"}},base),audio:false};
+  return navigator.mediaDevices.getUserMedia(c).catch(function(err){
+    if(lens && err && err.name === "OverconstrainedError")
+      return navigator.mediaDevices.getUserMedia({video:Object.assign({facingMode:{ideal:"environment"}},base),audio:false});
+    throw err;
+  });
+}
+startCam.addEventListener("click", function(){
+  if(stream){ stopLive(); stopGuidance(); stopCamera(); setStatus("Camera stopped."); return; }
+  try{ ctx().resume(); }catch(e){}      // unlock audio on this user gesture
+  getStream().then(function(s){
+    stream = s; video.srcObject = s;
+    startCam.textContent = "Stop camera"; startCam.classList.add("on");
+    identifyBtn.disabled = false; liveBtn.disabled = false;
+    setStatus("Camera ready. Point at the car.");
+  }).catch(function(err){
+    var m = "Could not start the camera.";
+    if(err && err.name === "NotAllowedError") m = "Camera permission denied. Allow access in site settings, then try again.";
+    else if(err && err.name === "NotFoundError") m = "No camera found on this device.";
+    else if(location.protocol !== "https:" && location.hostname !== "localhost") m = "The camera needs a secure (https) connection.";
+    setVerdict(m, "error");
+  });
+});
+
+function capture(maxW){
+  var vw = video.videoWidth, vh = video.videoHeight;
+  if(!vw || !vh) return null;
+  var scale = vw > maxW ? maxW/vw : 1;
+  canvas.width = Math.round(vw*scale); canvas.height = Math.round(vh*scale);
+  canvas.getContext("2d").drawImage(video,0,0,canvas.width,canvas.height);
+  return canvas.toDataURL("image/jpeg",0.85).split(",")[1];
+}
+
+/* =======================================================================
+   PROMPTS
+   ======================================================================= */
+function confirmPrompt(){
+  return "Decide whether the car in this photo is a specific expected private-hire vehicle.\n"+
+    "Expected: plate="+(expected.plate||"not provided")+
+    ", colour="+(expected.colour||"not provided")+
+    ", brand="+(expected.brand||"not provided")+
+    ", model="+(expected.model||"not provided")+".\n"+
+    "Apply these rules exactly:\n"+
+    "- plate readable AND matches -> match (even if a descriptor disagrees; note the disagreement in detail)\n"+
+    "- plate readable AND differs -> mismatch\n"+
+    "- plate NOT readable AND every provided descriptor matches -> potential\n"+
+    "- plate NOT readable AND any provided descriptor contradicts -> mismatch\n"+
+    "- plate NOT readable AND no descriptors provided, or the image is too unclear to judge -> uncertain\n"+
+    "Never guess a plate character you cannot actually read.\n"+
+    "Return ONLY minified JSON, no prose, no fences: "+
+    '{"vehicle_detected":true|false,"state":"match"|"potential"|"mismatch"|"uncertain",'+
+    '"matched_fields":[string],"mismatched_fields":[string],'+
+    '"orientation":"nose-facing"|"boot-facing"|"nose-left"|"nose-right"|"unclear",'+
+    '"detail":string}. '+
+    "'detail' is one short spoken sentence. Do not repeat the state word in detail.";
+}
+
+var OPEN_PROMPT =
+ "Identify the car in this photo. Return ONLY minified JSON, no prose, no fences: "+
+ '{"vehicle_detected":true|false,"plate":string|null,"colour":string|null,"brand":string|null,'+
+ '"model":string|null,"orientation":"nose-facing"|"boot-facing"|"nose-left"|"nose-right"|"unclear",'+
+ '"detail":string}. '+
+ "Set vehicle_detected false if no car is clearly visible. Never guess a plate character you cannot read; use null. "+
+ "'detail' is one short spoken sentence.";
+
+var GUIDE_PROMPT =
+ "You are guiding a blind person to a car that has ALREADY been confirmed as theirs. "+
+ "Do not identify or re-verify the car. Report only where it is and how it is oriented.\n"+
+ "Report at the most specific level you are confident about:\n"+
+ "  handle - you can see a door handle clearly\n"+
+ "  face   - you can tell which end of the car faces the camera\n"+
+ "  side   - you can only tell you are looking at a side\n"+
+ "  unclear- the car is not clearly visible\n"+
+ "Prefer naming a REAR door over a front door when both are visible. "+
+ "Describe position relative to the car itself, not the viewer.\n"+
+ "Return ONLY minified JSON, no prose, no fences: "+
+ '{"car_visible":true|false,"guidance_level":"handle"|"face"|"side"|"unclear",'+
+ '"orientation":"nose-facing"|"boot-facing"|"nose-left"|"nose-right"|"unclear",'+
+ '"guidance":string}. '+
+ "'guidance' is one short spoken phrase, six words or fewer.";
+
+/* =======================================================================
+   VERIFICATION
+   ======================================================================= */
+function runScan(isLive){
+  if(busy || phase === "guiding") return;
+  var b64 = capture(1600);
+  if(!b64){ setStatus("Camera not ready yet."); return; }
+  busy = true;
+  if(!isLive) identifyBtn.disabled = true;
+  setStatus(isLive ? "Scanning..." : "Reading the car...");
+
+  var blocks = [{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
+                {type:"text",text: mode==="confirm" ? confirmPrompt() : OPEN_PROMPT}];
+
+  callClaude(blocks, 400).then(function(j){
+    busy = false; if(!isLive) identifyBtn.disabled = false;
+    handleResult(j, isLive);
+  }).catch(function(e){
+    busy = false; if(!isLive) identifyBtn.disabled = false;
+    setStatus(e.message);
+    if(!isLive) setVerdict("Could not complete the scan.","error");
+  });
+}
+
+function handleResult(j, isLive){
+  if(!j.vehicle_detected){
+    noCarStreak++;
+    setVerdict("No car detected","");
+    setDetail(j.detail || "Point the camera toward the car.");
+    if(isLive) retune();
+    return;
   }
+  noCarStreak = 0; if(isLive) retune();
 
-  /* ---------- Mode A: parse ride details ---------- */
-  var RIDE_PARSE_PROMPT =
-    "You are extracting private-hire vehicle details from either a free-text description or a screenshot of a ride-booking app (Grab, Gojek, etc). " +
-    "Return ONLY minified JSON, no prose, no markdown fences, matching exactly this shape: " +
-    '{"found":true|false,"plate":string|null,"colour":string|null,"brand":string|null,"model":string|null,"detail":string}. ' +
-    "Use null for any field you cannot determine. Do not guess a plate number if it is not clearly legible or stated. " +
-    "'detail' is a short one-sentence note, e.g. flagging low confidence on any field, or explaining why found is false.";
-
-  parseRide.addEventListener("click", function () {
-    var text = rideText.value.trim();
-    var file = rideShot.files[0];
-    if (!text && !file) {
-      parsedEcho.textContent = "Type a description or choose a screenshot first.";
-      return;
-    }
-    parseRide.disabled = true;
-    setStatus("Reading your ride details...");
-    parsedEcho.textContent = "";
-    confirmRow.hidden = true;
-
-    var blocksPromise;
-    if (file) {
-      blocksPromise = fileToBase64(file).then(function (b64) {
-        return [
-          { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: b64 } },
-          { type: "text", text: RIDE_PARSE_PROMPT + (text ? (" Additional context from the user: " + text) : "") }
-        ];
-      });
-    } else {
-      blocksPromise = Promise.resolve([
-        { type: "text", text: RIDE_PARSE_PROMPT + " User's description: " + text }
-      ]);
-    }
-
-    blocksPromise.then(function (blocks) {
-      return callClaude(blocks, 300);
-    }).then(function (json) {
-      parseRide.disabled = false;
-      if (!json.found) {
-        parsedEcho.textContent = "Could not find car details. " + (json.detail || "Try describing it, or a clearer screenshot.");
-        setStatus("");
-        return;
-      }
-      expected = {
-        plate: json.plate || null,
-        colour: json.colour || null,
-        brand: json.brand || null,
-        model: json.model || null
-      };
-      var parts = [];
-      if (expected.colour) parts.push(expected.colour);
-      if (expected.brand) parts.push(expected.brand);
-      if (expected.model) parts.push(expected.model);
-      var summary = parts.length ? parts.join(" ") : "car";
-      var plateText = expected.plate ? (", plate " + expected.plate) : ", plate not found";
-      parsedEcho.textContent = "Got it: " + summary + plateText + ". " + (json.detail || "");
-      confirmRow.hidden = false;
-      setStatus("Check the details, then confirm or try again.");
-    }).catch(function (err) {
-      parseRide.disabled = false;
-      parsedEcho.textContent = "Error: " + err.message;
-      setStatus("");
-    });
-  });
-
-  editRideBtn.addEventListener("click", function () {
-    expected = null;
-    parsedEcho.textContent = "";
-    confirmRow.hidden = true;
-    setStatus("");
-  });
-
-  confirmRideBtn.addEventListener("click", function () {
-    editRideFromScan.hidden = false;
+  if(mode === "open"){
     var parts = [];
-    if (expected.colour) parts.push(expected.colour);
-    if (expected.brand) parts.push(expected.brand);
-    if (expected.model) parts.push(expected.model);
-    var summary = parts.length ? parts.join(" ") : "car";
-    expectedSummary.textContent = "Looking for: " + summary + (expected.plate ? (", plate " + expected.plate) : ", plate unknown");
-    showScreen("scan");
-  });
-
-  /* ---------- lens detection ---------- */
-  detectLenses.addEventListener("click", function () {
-    lensHint.textContent = "Detecting cameras...";
-    navigator.mediaDevices.getUserMedia({ video: true }).then(function (s) {
-      s.getTracks().forEach(function (t) { t.stop(); });
-      return navigator.mediaDevices.enumerateDevices();
-    }).then(function (devices) {
-      var vids = devices.filter(function (d) { return d.kind === "videoinput"; });
-      while (lensSel.options.length > 1) { lensSel.remove(1); }
-      vids.forEach(function (d, i) {
-        var opt = document.createElement("option");
-        opt.value = d.deviceId;
-        opt.textContent = d.label || ("Camera " + (i + 1));
-        lensSel.appendChild(opt);
-      });
-      var saved = safeGet(LENS_STORE);
-      if (saved) {
-        var exists = Array.prototype.some.call(lensSel.options, function (o) { return o.value === saved; });
-        if (exists) lensSel.value = saved;
-      }
-      lensHint.textContent = vids.length ? ("Found " + vids.length + " camera(s). Choose one, then Save and continue.") : "No cameras found.";
-    }).catch(function (err) {
-      lensHint.textContent = "Could not access the camera to detect lenses: " + (err && err.message ? err.message : "unknown error");
-    });
-  });
-
-  /* ---------- camera (toggle) ---------- */
-  function stopCamera() {
-    if (stream) {
-      stream.getTracks().forEach(function (t) { t.stop(); });
-      stream = null;
-    }
-    video.srcObject = null;
-    startCam.textContent = "Start camera";
-    startCam.classList.remove("on");
-    identifyBtn.disabled = true;
-    liveBtn.disabled = true;
+    if(j.colour) parts.push(j.colour);
+    if(j.brand) parts.push(j.brand);
+    if(j.model) parts.push(j.model);
+    var name = parts.length ? parts.join(" ") : "Car";
+    setVerdict(name + (j.plate ? (", plate "+j.plate) : ", plate not legible"), "");
+    setDetail([ORIENT[j.orientation]||"", j.detail||""].filter(Boolean).join(" "));
+    return;
   }
 
-  function stopLive() {
-    if (liveTimer) {
-      clearInterval(liveTimer);
-      liveTimer = null;
-      liveBtn.textContent = "Start Live mode";
-      liveBtn.classList.remove("live-on");
-    }
+  var fields = [];
+  if(j.matched_fields && j.matched_fields.length) fields.push(j.matched_fields.join(" and ")+" match");
+  if(j.mismatched_fields && j.mismatched_fields.length) fields.push(j.mismatched_fields.join(" and ")+" different");
+  var suffix = (minimal() || !fields.length) ? "" : ". " + fields.join(", ");
+
+  // Region A carries the verdict. Region B carries orientation + detail.
+  // The two never overlap, so nothing is announced twice.
+  var orient = ORIENT[j.orientation] || "";
+
+  if(j.state === "match"){
+    latchMatch(j, fields);
+  } else if(j.state === "potential"){
+    setVerdict("Potential match" + suffix, "potential");
+    setDetail([orient, j.detail||""].filter(Boolean).join(" "));
+    playCue("potential");
+  } else if(j.state === "mismatch"){
+    setVerdict("Mismatch" + suffix, "mismatch");
+    setDetail(j.detail || "");          // orientation omitted: not your car
+    playCue("mismatch");
+  } else {
+    setVerdict("Uncertain", "uncertain");
+    setDetail([orient, j.detail||"Move closer and try again."].filter(Boolean).join(" "));
+    playCue("uncertain");
   }
+}
 
-  function getCameraStream() {
-    var lensId = safeGet(LENS_STORE);
-    var base = { width: { ideal: 1920 }, height: { ideal: 1440 } };
-    var constraints;
-    if (lensId) {
-      constraints = { video: Object.assign({ deviceId: { exact: lensId } }, base), audio: false };
-    } else {
-      constraints = { video: Object.assign({ facingMode: { ideal: "environment" } }, base), audio: false };
-    }
-    return navigator.mediaDevices.getUserMedia(constraints).catch(function (err) {
-      if (lensId && err && err.name === "OverconstrainedError") {
-        return navigator.mediaDevices.getUserMedia({ video: Object.assign({ facingMode: { ideal: "environment" } }, base), audio: false });
-      }
-      throw err;
-    });
+/* Adaptive backoff: stretch the interval while nothing is found. */
+function retune(){
+  if(!liveTimer) return;
+  var want = noCarStreak >= 6 ? MAX_MS : (noCarStreak >= 3 ? BASE_MS*2 : BASE_MS);
+  if(want !== retune.cur){
+    retune.cur = want;
+    clearInterval(liveTimer);
+    liveTimer = setInterval(function(){ runScan(true); }, want);
   }
+}
 
-  startCam.addEventListener("click", function () {
-    if (stream) {
-      stopLive();
-      stopCamera();
-      setStatus("Camera stopped.");
-      return;
-    }
-    getCameraStream().then(function (s) {
-      stream = s;
-      video.srcObject = s;
-      startCam.textContent = "Stop camera";
-      startCam.classList.add("on");
-      identifyBtn.disabled = false;
-      liveBtn.disabled = false;
-      setStatus("Camera ready. Point at the car.");
-    }).catch(function (err) {
-      var msg = "Could not start the camera.";
-      if (err && err.name === "NotAllowedError") msg = "Camera permission was denied. Allow camera access in your browser's site settings, then try again.";
-      else if (err && err.name === "NotFoundError") msg = "No camera was found on this device.";
-      else if (location.protocol !== "https:" && location.hostname !== "localhost") msg = "The camera needs a secure connection (https).";
-      showResult(msg, "error");
-    });
-  });
+/* =======================================================================
+   LATCH + MATCH DIALOG
+   Once matched, the app stops asking "is this my car?". It cannot say
+   mismatch afterwards, because that question is closed.
+   ======================================================================= */
+function latchMatch(j, fields){
+  stopLive();
+  phase = "latched";
+  var line = "Match" + (fields.length && !minimal() ? ". " + fields.join(", ") : "");
+  setVerdict(line, "match");
+  setDetail([ORIENT[j.orientation]||"", j.detail||""].filter(Boolean).join(" "));
+  playCue("match");
 
-  function captureFrame() {
-    var vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw || !vh) return null;
-    var maxW = 1600;
-    var scale = vw > maxW ? maxW / vw : 1;
-    canvas.width = Math.round(vw * scale);
-    canvas.height = Math.round(vh * scale);
-    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
+  dlgVerdict.textContent = "Match";
+  dlgDetail.textContent = fields.length ? fields.join(", ") + "." : "This is the car you booked.";
+  dlgExtra.textContent = [ORIENT[j.orientation]||"", j.detail||""].filter(Boolean).join(" ");
+  openDialog();
+
+  // Announce once more shortly after, in case the first was missed.
+  setTimeout(function(){ if(phase === "latched"){ speak(line); playCue("match"); } }, 3200);
+}
+
+function focusables(){
+  return Array.prototype.slice.call(dialog.querySelectorAll("button:not([disabled])"));
+}
+function openDialog(){
+  lastFocus = document.activeElement;
+  backdrop.hidden = false;
+  setTimeout(function(){ dialog.focus(); }, 40);
+  document.addEventListener("keydown", trap, true);
+}
+function closeDialog(){
+  backdrop.hidden = true;
+  document.removeEventListener("keydown", trap, true);
+  if(lastFocus && lastFocus.focus) lastFocus.focus();
+}
+function trap(e){
+  if(backdrop.hidden) return;
+  if(e.key === "Escape"){ e.preventDefault(); dismissDialog(); return; }
+  if(e.key !== "Tab") return;
+  var f = focusables(); if(!f.length) return;
+  var first = f[0], last = f[f.length-1];
+  if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+  else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+}
+function dismissDialog(){
+  closeDialog();
+  phase = "verify";
+  liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
+  identifyBtn.disabled = false;
+  setStatus("Stopped. Start Live again to re-check the same car.");
+}
+dlgDismiss.addEventListener("click", dismissDialog);
+dlgGuidance.addEventListener("click", function(){ closeDialog(); startGuidance(); });
+
+/* =======================================================================
+   GUIDANCE  (Haiku, downsampled frames, announce on change only)
+   ======================================================================= */
+function startGuidance(){
+  phase = "guiding"; lastGuide = "";
+  guideEnds = Date.now() + GUIDE_MS;
+  identifyBtn.textContent = "Verify again"; identifyBtn.disabled = false;
+  liveBtn.textContent = "Stop guidance"; liveBtn.classList.add("on");
+  setVerdict("Guidance on", "match");
+  setDetail("");
+  setStatus("Guiding you to the car.");
+  guideStep();
+  guideTimer = setInterval(guideStep, 4000);
+}
+function stopGuidance(){
+  if(guideTimer){ clearInterval(guideTimer); guideTimer = null; }
+  if(phase === "guiding"){
+    phase = "verify";
+    identifyBtn.textContent = "Identify";
+    liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
   }
-
-  /* ---------- Mode A & B scan prompts ---------- */
-  function confirmPrompt() {
-    return "You are confirming whether a car in a photo matches a specific expected private-hire vehicle. " +
-      "Expected vehicle: plate=" + (expected.plate || "unknown") +
-      ", colour=" + (expected.colour || "unknown") +
-      ", brand=" + (expected.brand || "unknown") +
-      ", model=" + (expected.model || "unknown") + ". " +
-      "Look at the photo and compare. Return ONLY minified JSON, no prose, no markdown fences: " +
-      '{"vehicle_detected":true|false,"match_status":"match"|"mismatch"|"uncertain","matched_fields":[string],"mismatched_fields":[string],"detected":{"plate":string|null,"colour":string|null,"brand":string|null,"model":string|null},"detail":string}. ' +
-      "Use 'uncertain' if the photo is unclear, too far, or key fields (especially plate) cannot be read confidently — do not guess. " +
-      "'detail' is one short spoken-style sentence explaining the result.";
+}
+function guideStep(){
+  if(Date.now() > guideEnds){
+    stopGuidance();
+    setVerdict("", ""); setDetail("");
+    setStatus("Guidance finished.");
+    return;
   }
+  if(busy) return;
+  var b64 = capture(800);          // guidance does not need plate resolution
+  if(!b64) return;
+  busy = true;
+  callClaude([{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
+              {type:"text",text:GUIDE_PROMPT}], 200, "claude-haiku-4-5-20251001")
+  .then(function(j){
+    busy = false;
+    var msg;
+    if(!j.car_visible || j.guidance_level === "unclear") msg = "Lost sight of the car.";
+    else if(j.guidance_level === "handle") msg = j.guidance || (ORIENT[j.orientation]||"Car in view.");
+    else msg = ORIENT[j.orientation] || j.guidance || "Car in view.";
+    if(msg !== lastGuide){          // only announce genuine changes
+      lastGuide = msg;
+      setDetail(msg);
+      if(!minimal()) speak(msg);
+    }
+  }).catch(function(){ busy = false; });
+}
 
-  var OPEN_PROMPT =
-    "Identify the private-hire or passenger car in this photo. Return ONLY minified JSON, no prose, no markdown fences: " +
-    '{"vehicle_detected":true|false,"plate":string|null,"plate_confidence":"high"|"medium"|"low"|null,"colour":string|null,"brand":string|null,"model":string|null,"model_confidence":"high"|"medium"|"low"|null,"detail":string}. ' +
-    "Set vehicle_detected to false if no car is clearly visible. Never guess a plate character you cannot actually read; use null instead. " +
-    "'detail' is one short spoken-style sentence, noting anything relevant like multiple cars in frame or poor lighting.";
+/* =======================================================================
+   BUTTONS
+   ======================================================================= */
+identifyBtn.addEventListener("click", function(){
+  if(phase === "guiding"){ stopGuidance(); clearResults(); setStatus("Back to verifying."); return; }
+  runScan(false);
+});
 
-  function runScan(isLive) {
-    if (busy) return;
-    var b64 = captureFrame();
-    if (!b64) { setStatus("Camera not ready yet."); return; }
-    busy = true;
-    if (!isLive) { identifyBtn.disabled = true; }
-    setStatus(isLive ? "Scanning..." : "Reading the car...");
+liveBtn.addEventListener("click", function(){
+  if(phase === "guiding"){ stopGuidance(); setStatus("Guidance stopped."); return; }
+  if(liveTimer){ stopLive(); setStatus("Live stopped."); return; }
+  noCarStreak = 0; retune.cur = BASE_MS;
+  liveBtn.textContent = "Stop Live"; liveBtn.classList.add("on");
+  identifyBtn.disabled = true;
+  setStatus("Live running.");
+  runScan(true);
+  liveTimer = setInterval(function(){ runScan(true); }, BASE_MS);
+  sessionCap = setTimeout(function(){
+    stopLive(); setStatus("Live stopped automatically after five minutes.");
+  }, SESSION_MS);
+});
 
-    var promptText = mode === "confirm" ? confirmPrompt() : OPEN_PROMPT;
-    var blocks = [
-      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: b64 } },
-      { type: "text", text: promptText }
-    ];
-
-    callClaude(blocks, 350).then(function (json) {
-      busy = false;
-      if (!isLive) identifyBtn.disabled = false;
-      handleScanResult(json);
-    }).catch(function (err) {
-      busy = false;
-      if (!isLive) identifyBtn.disabled = false;
-      setStatus(err.message);
-      if (!isLive) showResult("Could not complete the scan.", "error");
-    });
+function stopLive(){
+  if(liveTimer){ clearInterval(liveTimer); liveTimer = null; }
+  if(sessionCap){ clearTimeout(sessionCap); sessionCap = null; }
+  if(phase !== "guiding"){
+    liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
+    identifyBtn.disabled = !stream;
   }
-
-  function handleScanResult(json) {
-    if (!json.vehicle_detected) {
-      showResult("No car detected.", "");
-      setStatus(json.detail || "Point the camera at the car and try again.");
-      return;
-    }
-    if (mode === "confirm") {
-      var detailBits = [];
-      if (json.matched_fields && json.matched_fields.length) detailBits.push(json.matched_fields.join(" and ") + " match" + (json.matched_fields.length > 1 ? "" : "es"));
-      if (json.mismatched_fields && json.mismatched_fields.length) detailBits.push(json.mismatched_fields.join(" and ") + " different");
-      var line = "";
-      if (json.match_status === "match") {
-        line = "Match. " + (detailBits.length ? detailBits.join(". ") + "." : "");
-        showResult(line.trim(), "match");
-        cueMatch();
-      } else if (json.match_status === "mismatch") {
-        line = "Mismatch. " + (detailBits.length ? detailBits.join(". ") + "." : "");
-        showResult(line.trim(), "mismatch");
-        cueMismatch();
-      } else {
-        line = "Uncertain. " + (json.detail || "Move closer and try again.");
-        showResult(line.trim(), "uncertain");
-        cueUncertain();
-      }
-      setStatus(json.detail || "");
-    } else {
-      var parts = [];
-      if (json.brand) parts.push(json.brand);
-      if (json.model) parts.push(json.model);
-      var name = parts.length ? parts.join(" ") : "Car";
-      var plate = json.plate ? (", plate " + json.plate) : ", plate not legible";
-      var colour = json.colour ? (json.colour + " ") : "";
-      showResult(colour + name + plate + ".", "");
-      setStatus(json.detail || "");
-    }
-  }
-
-  identifyBtn.addEventListener("click", function () { runScan(false); });
-
-  liveBtn.addEventListener("click", function () {
-    if (liveTimer) {
-      stopLive();
-      identifyBtn.disabled = false;
-      setStatus("Live mode stopped.");
-    } else {
-      liveBtn.textContent = "Stop Live mode";
-      liveBtn.classList.add("live-on");
-      identifyBtn.disabled = true;
-      setStatus("Live mode running.");
-      runScan(true);
-      liveTimer = setInterval(function () { runScan(true); }, LIVE_INTERVAL_MS);
-    }
-  });
+}
 })();
 </script>
 </body>
