@@ -73,6 +73,16 @@
   #dlgDetail{color:var(--text);margin:0 0 6px}
   #dlgExtra{color:var(--muted);font-size:.9rem;margin:0}
   #matchDialog button{width:100%;min-height:64px;margin-top:12px}
+  /* Headings stay in the accessibility tree and keep taking focus from
+     show(); they just stop competing for screen space. The visible screen
+     label is the tagline slot instead. */
+  #whatsNew summary{cursor:pointer;padding:10px 2px;font-weight:600}
+  #whatsNew h4{margin:14px 0 4px;font-size:.95rem}
+  #whatsNew ul{margin:0 0 4px 0;padding-left:20px}
+  #whatsNew li{margin:3px 0;color:var(--muted)}
+  #newsHint{margin-top:14px;font-size:.9rem;color:var(--muted)}
+  .vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;
+      overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 </style>
 </head>
 <body>
@@ -83,11 +93,11 @@
 </div>
 
 <main>
-  <p class="tagline">Identify a private-hire car, or confirm it's the one you booked.</p>
+  <p class="tagline" id="tagline">Identify a private-hire car, or confirm it's the one you booked.</p>
 
   <!-- ================= SETTINGS ================= -->
   <section id="setupScreen" class="screen card" aria-labelledby="setup-h">
-    <h2 id="setup-h" tabindex="-1">Settings</h2>
+    <h2 id="setup-h" class="vh" tabindex="-1">Settings</h2>
     <p class="hint" id="settingsNote">Changes are saved when you go back.</p>
 
     <label for="apiKey">Access code</label>
@@ -124,16 +134,20 @@
     </div>
     <p class="hint">Sound cues may be silenced by the iPhone ring/silent switch. Test with the button below.</p>
 
-    <button id="testCues" class="secondary" type="button">Play all four sound cues</button>
+    <button id="testCues" class="secondary" type="button">Play all six sound cues</button>
 
     <button id="saveKey" class="primary">Save and continue</button>
     <p class="hint">Photos are sent to a proxy server for recognition and are not stored anywhere. No Anthropic key is kept in this browser. Booking screenshots often show your driver's name and number, so only the vehicle details are read from them.</p>
-    <p class="hint" id="versionLine">Car Spotter version 2.0.0</p>
+    <details id="whatsNew">
+      <summary id="whatsNewToggle">What's new</summary>
+      <div id="changelog"></div>
+    </details>
+    <p class="hint" id="versionLine">Car Spotter version 2.1.0</p>
   </section>
 
   <!-- ================= MODE ================= -->
   <section id="modeScreen" class="screen card" aria-labelledby="mode-h" hidden>
-    <h2 id="mode-h" tabindex="-1">What do you need?</h2>
+    <h2 id="mode-h" class="vh" tabindex="-1">What do you need?</h2>
     <div class="choice">
       <button id="modeConfirm">
         <span class="t">Confirm my ride</span>
@@ -144,11 +158,15 @@
         <span class="s">No booking details — just find out what car this is</span>
       </button>
     </div>
+    <!-- Only present after an update, and never a live region: it waits to be
+         found rather than interrupting someone who opened the app because a
+         car is arriving. -->
+    <p id="newsHint" hidden></p>
   </section>
 
   <!-- ================= INTAKE ================= -->
   <section id="intakeScreen" class="screen card" aria-labelledby="intake-h" hidden>
-    <h2 id="intake-h" tabindex="-1">Your ride details</h2>
+    <h2 id="intake-h" class="vh" tabindex="-1">Your ride details</h2>
     <p class="hint">Type or dictate a description, or upload a screenshot of your booking. Only the vehicle details are kept; the image is discarded after reading.</p>
 
     <label for="rideText">Describe the car</label>
@@ -169,7 +187,7 @@
   <!-- ================= SCAN ================= -->
   <section id="scanScreen" class="screen" aria-labelledby="scan-h" hidden>
     <div class="card">
-      <h2 id="scan-h" tabindex="-1">Scan</h2>
+      <h2 id="scan-h" class="vh" tabindex="-1">Confirming your ride</h2>
       <div id="expectedSummary" class="hint"></div>
       <button id="editRideFromScan" class="secondary" hidden type="button">Edit ride details</button>
 
@@ -182,6 +200,12 @@
       <!-- Region B, Minimalistic style: never announces, navigate to it -->
       <h3 id="detailsHeading" hidden>Details</h3>
       <div id="detailStatic"></div>
+
+      <!-- Plain text, deliberately not a live region. It updates every second
+           while Live runs, so it can be read on demand by touch or swipe
+           without announcing itself sixty times. -->
+      <p id="liveNote" class="hint">Live checks every few seconds and stops on its own after five minutes.</p>
+      <p id="liveLeft" hidden></p>
 
       <div id="status"></div>
     </div>
@@ -225,7 +249,7 @@ if("serviceWorker" in navigator){
    a code that its proxy will reject. */
 var NS = "carspotter.";
 var K = {key:NS+"accessCode", model:NS+"model", speak:NS+"speak", cam:NS+"cam",
-         style:NS+"style", sound:NS+"sound"};
+         style:NS+"style", sound:NS+"sound", seen:NS+"seenVersion"};
 var PROXY_URL = "https://car-spotter-proxy.chs1809.workers.dev";
 var MAX_TOKENS = 400;   // the Worker caps at 400; asking for more is silently clamped
 
@@ -381,9 +405,54 @@ var CUES = {
     ["d",NOTES.E4,0.185,1.20,0.86,-0.26]], 1.50, 0.46); }
 };
 
+/* Two additions to the verdict family, both built from the same voices so
+   the app keeps one instrument.
+
+   respond - the D3 pedal under a single damped G4. Every verdict is a
+     pedal plus a figure of two or three bells; this is a pedal plus one
+     strike, a third the length and a third the level. One syllable rather
+     than a sentence, which is why it can fire on every poll without
+     reading as a fifth verdict.
+
+   error - the match figure inverted: D5, B4, G4 falling over the same
+     positive pedal. Deliberately not the negative pedal, because a server
+     failure is not a judgement about the car. */
 var VIBES = { match:[90], potential:[70,60,70], uncertain:[180], mismatch:[60,50,60,50,60] };
 
+CUES.respond = function(){ return renderCue([
+  ["b",NOTES.D3,0.000,0.60,0.24, 0.00],
+  ["d",NOTES.G4,0.000,0.52,1.00, 0.00]], 0.80, 0.34); };
+CUES.error = function(){ return renderCue([
+  ["b",NOTES.D3,0.000,1.15,0.24, 0.00],
+  ["r",NOTES.D5,0.000,1.05,1.00, 0.30],
+  ["r",NOTES.B4,0.150,1.05,0.86, 0.00],
+  ["r",NOTES.G4,0.300,1.30,0.80,-0.30]], 1.60, 0.58); };
+VIBES.respond = [30];
+VIBES.error   = [110,70,110];
+
+/* Guidance chimes. Deliberately apart from the four verdicts on three axes
+   at once - no bass pedal, an octave above the verdict register, a third of
+   the length at roughly half the level - because these fire every four
+   seconds and must never read as a verdict.
+     guideNear  damped G5, one soft tap        - the car is in view
+     guideFar   D5 + G5, hollow and unresolved - the car is out of sight
+   Pan is left at 0. It is the free parameter reserved for direction later,
+   and should be applied with a StereoPannerNode at playback rather than
+   baked in here, so one cached buffer still serves every direction. */
+NOTES.G5 = 783.99;
+CUES.guideNear = function(){ return renderCue([
+  ["d",NOTES.G5,0.000,0.40,1.00, 0]], 0.52, 0.30); };
+CUES.guideFar = function(){ return renderCue([
+  ["r",NOTES.D5,0.000,0.34,0.72, 0],
+  ["r",NOTES.G5,0.030,0.38,1.00, 0]], 0.55, 0.34); };
+VIBES.guideNear = [40];
+VIBES.guideFar  = [50,40,50];
+
 function playCue(name){
+  /* Vibration comes first and is not gated by the sound setting. Someone who
+     cannot hear the cues will have turned sound off, and they are exactly the
+     person for whom the haptic is the only channel left. */
+  if(navigator.vibrate && VIBES[name]){ try{ navigator.vibrate(VIBES[name]); }catch(e){} }
   if(sget(K.sound) === "0") return;
   try{
     var c = ctx();
@@ -397,7 +466,6 @@ function playCue(name){
     src.connect(conv).connect(wet).connect(c.destination);
     src.start();
   }catch(e){}
-  if(navigator.vibrate && VIBES[name]){ try{ navigator.vibrate(VIBES[name]); }catch(e){} }
 }
 
 /* =======================================================================
@@ -414,6 +482,47 @@ var headerBack = document.getElementById("headerBack");
 var headerSettings = document.getElementById("headerSettings");
 var current = "setup", settingsReturn = null;
 
+/* The tagline slot is the app's purpose statement on the main screen and the
+   visible screen label everywhere else. Where it merely restates the h2 it is
+   hidden from the accessibility tree, so the same words are never announced
+   twice; on the main screen it says something the h2 does not, so it stays. */
+var TAGLINE = "Identify a private-hire car, or confirm it's the one you booked.";
+var SCREEN_LABEL = { setup:"Settings", intake:"Your ride details" };
+
+function scanLabel(){
+  if(phase === "guiding") return "Guiding you to the car";
+  if(phase === "ended")   return "Guidance finished";
+  return mode === "confirm" ? "Confirming your ride" : "Identifying a car";
+}
+function syncScanLabels(){
+  if(current !== "scan") return;
+  var t = scanLabel();
+  scanH.textContent = t;
+  tagline.textContent = t;
+  liveNote.hidden = (phase === "guiding" || phase === "ended");
+}
+function setTagline(name){
+  if(name === "mode"){
+    tagline.textContent = TAGLINE;
+    tagline.removeAttribute("aria-hidden");
+  } else {
+    tagline.textContent = (name === "scan") ? scanLabel() : (SCREEN_LABEL[name] || "");
+    tagline.setAttribute("aria-hidden", "true");
+  }
+}
+
+/* Back means one thing on the scan screen while guidance is up and another
+   once it is down, so it names where it is going rather than leaving the
+   user to guess. */
+function syncBack(){
+  var label = "Back";
+  if(current === "scan")
+    label = (phase === "guiding" || phase === "ended") ? "Back to verification" : "Back to home";
+  else if(current === "intake") label = "Back to home";
+  headerBack.textContent = "\u2039 " + label;
+  headerBack.setAttribute("aria-label", label);
+}
+
 function show(name){
   Object.keys(screens).forEach(function(k){ screens[k].hidden = (k !== name); });
   current = name;
@@ -425,6 +534,9 @@ function show(name){
     saveKey.hidden = !firstRun;
     settingsNote.hidden = firstRun;
   }
+  if(name === "scan"){ scanH.textContent = scanLabel(); liveNote.hidden = false; }
+  setTagline(name);
+  syncBack();
   var h = screens[name].querySelector("h2");
   if(h) setTimeout(function(){ h.focus(); }, 30);
   window.scrollTo(0,0);
@@ -446,6 +558,10 @@ var apiKeyInput=$("apiKey"), modelSel=$("modelSel"), styleSel=$("styleSel"), sty
     canvas=$("canvas"), identifyBtn=$("identifyBtn"), liveBtn=$("liveBtn"),
     verdictEl=$("verdict"), detailLive=$("detailLive"), detailStatic=$("detailStatic"),
     detailsHeading=$("detailsHeading"), statusEl=$("status"),
+    tagline=$("tagline"), scanH=$("scan-h"),
+    liveNote=$("liveNote"), liveLeft=$("liveLeft"),
+    whatsNew=$("whatsNew"), whatsNewToggle=$("whatsNewToggle"),
+    changelog=$("changelog"), newsHint=$("newsHint"), versionLine=$("versionLine"),
     backdrop=$("dialogBackdrop"), dialog=$("matchDialog"), dlgVerdict=$("dlgVerdict"),
     dlgDetail=$("dlgDetail"), dlgExtra=$("dlgExtra"),
     dlgGuidance=$("dlgGuidance"), dlgDismiss=$("dlgDismiss");
@@ -457,12 +573,19 @@ var mode = "confirm";          // "confirm" | "open"
 var expected = null;
 var stream = null, busy = false;
 var liveTimer = null, sessionCap = null;
-var phase = "verify";          // "verify" | "guiding"
+var phase = "verify";          // "verify" | "latched" | "guiding" | "ended"
 var guideTimer = null, guideEnds = 0, lastGuide = "";
 var noCarStreak = 0;
 var lastErrText = "", errStreak = 0, guideErrs = 0;
-var BASE_MS = 5000, MAX_MS = 12000, SESSION_MS = 5*60*1000, GUIDE_MS = 45*1000;
+var matchLine = "";            // the verdict text to restore when guidance ends
+var guideSince = 0;            // responses since the cue was last spoken
+var farStreak = 0;             // consecutive out-of-sight responses (hysteresis)
+var scanGen = 0, guideGen = 0; // a manual shot supersedes anything still in flight
+var BASE_MS = 5000, MAX_MS = 12000, SESSION_MS = 5*60*1000, GUIDE_MS = 60*1000;
+var GUIDE_EVERY = 4000;
 var lastFocus = null;
+var newsPending = false;
+var liveEnds = 0, liveTick = null;
 
 /* =======================================================================
    OUTPUT
@@ -523,8 +646,104 @@ function loadSettings(){
   styleText();
 }
 
+
+/* =======================================================================
+   CHANGELOG
+   Written to on every push. Entries are for the user first, so each line
+   says what changed for them rather than what changed in the code - but
+   it doubles as the record of what this build actually contains.
+   ======================================================================= */
+var VERSION = "2.1.0";
+var CHANGELOG = [
+ { v:"2.1.0", items:[
+   "The screen name now shows at the top of every screen, and headings no longer take up space visually.",
+   "Your ride summary shows just the car, and reads as matched once a match is found.",
+   "Guidance now runs for a minute instead of 45 seconds.",
+   "Guidance plays a soft chime with every check, so you can tell it is still working. A different, hollower chime means the car is out of sight.",
+   "Guidance repeats the cue even when nothing has changed: every second check when the car is lost, every third when it is in view.",
+   "The middle button in guidance is now Check now. It takes a fresh photo straight away instead of waiting for the next check.",
+   "Guidance now stays put when it finishes, rather than sending you back. The right button starts another minute.",
+   "Edit ride details is hidden during guidance.",
+   "Back now says where it goes: Back to verification, or Back to home.",
+   "Dismissing a match, or going back from guidance, clears the match completely.",
+   "Vibration no longer stops when sound cues are switched off.",
+   "Minimalistic results are shorter and say what the match rests on. What matched and what differed moved to Details.",
+   "Scan errors are now announced properly instead of appearing silently. Live stops rather than retrying into a rate limit.",
+   "Every check now makes a sound, including when no car is found, so you can tell Live is still running. Open identification too.",
+   "Server and connection problems have their own distinct sound.",
+   "Live states up front that it stops after five minutes, and shows the time remaining while it runs.",
+   "This What's new list."
+ ]},
+ { v:"2.0.0", items:[
+   "Rebuilt with its own server and its own access codes, separate from Spotter.",
+   "Access codes can be shared as a link instead of typed.",
+   "Four results: Match, Potential match, Mismatch, Uncertain.",
+   "Once a car is matched, the app stops re-checking and offers guidance mode.",
+   "Guidance mode helps you walk to the car, using orientation and door position.",
+   "New sound cues for all four results, with matching vibration.",
+   "Two output styles: Standard and Minimalistic.",
+   "Results and explanations now sit in separate regions, so nothing is announced twice.",
+   "Camera lens picker.",
+   "Installs to the home screen and updates itself, so shortcuts no longer serve an old version.",
+   "Version number and a privacy note added to Settings."
+ ]},
+ { v:"1.0.0", items:[
+   "First build. Confirm my ride, and Identify a car.",
+   "Ride details from a typed description or a booking screenshot.",
+   "Live mode for continuous checking while waiting.",
+   "Two photos per check, wide and zoomed, for better plate reading.",
+   "Spoken results, with vibration."
+ ]}
+];
+
+function renderChangelog(){
+  versionLine.textContent = "Car Spotter version " + VERSION;
+  var out = "";
+  CHANGELOG.forEach(function(rel){
+    out += "<h4>Version " + rel.v + (rel.v === VERSION ? " (this one)" : "") + "</h4><ul>";
+    rel.items.forEach(function(it){
+      out += "<li>" + it.replace(/&/g,"&amp;").replace(/</g,"&lt;") + "</li>";
+    });
+    out += "</ul>";
+  });
+  changelog.innerHTML = out;
+}
+
+/* Quiet by design. A fresh install has nothing to be new about, so it is
+   marked seen straight away; only an upgrade leaves a pointer, and that
+   pointer is a plain paragraph that never announces itself. */
+function newsInit(){
+  renderChangelog();
+  var seen = sget(K.seen);
+  if(!seen){
+    if(!sget(K.key)) sset(K.seen, VERSION);          // first install
+    else newsPending = true;                          // upgrade from before this feature
+  } else if(seen !== VERSION){
+    newsPending = true;
+  }
+  syncNews();
+}
+function syncNews(){
+  whatsNewToggle.textContent = newsPending ? ("What's new in " + VERSION) : "What's new";
+  newsHint.hidden = !newsPending;
+  newsHint.textContent = newsPending
+    ? "Car Spotter updated to " + VERSION + ". See What's new in Settings."
+    : "";
+}
+function markNewsSeen(){
+  if(!newsPending) return;
+  newsPending = false;
+  sset(K.seen, VERSION);
+  syncNews();
+}
+
+whatsNew.addEventListener("toggle", function(){
+  if(whatsNew.open) markNewsSeen();
+});
+
 (function init(){
   loadSettings();
+  newsInit();
   show(sget(K.key) ? "mode" : "setup");
 })();
 
@@ -563,14 +782,25 @@ headerSettings.addEventListener("click", function(){
 });
 
 headerBack.addEventListener("click", function(){
-  if(current === "setup"){ leaveSettings(); }
-  else if(current === "intake") show("mode");
-  else if(current === "scan"){ stopLive(); stopGuidance(); stopCamera(); show("mode"); }
+  if(current === "setup"){ leaveSettings(); return; }
+  if(current === "intake"){ show("mode"); return; }
+  if(current !== "scan") return;
+  /* From guidance, Back steps down to the verification screen rather than out
+     of the app. It clears the match on the way: you are returning to the
+     screen, not to a held state, and a stale "Matched" summary sitting above a
+     fresh verdict is the contradiction this whole change set set out to fix. */
+  if(phase === "guiding" || phase === "ended"){
+    stopGuidance(); clearMatch();
+    setStatus("Back to verifying.");
+    syncScanLabels(); syncBack();
+    return;
+  }
+  stopLive(); stopGuidance(); stopCamera(); show("mode");
 });
 
 testCues.addEventListener("click", function(){
-  var seq = ["match","potential","uncertain","mismatch"], i = 0;
-  setStatus("Playing: Match, Potential match, Uncertain, Mismatch.");
+  var seq = ["match","potential","uncertain","mismatch","respond","error"], i = 0;
+  setStatus("Playing: Match, Potential match, Uncertain, Mismatch, Response, Error.");
   (function next(){
     if(i >= seq.length){ setStatus(""); return; }
     playCue(seq[i++]); setTimeout(next, 2600);
@@ -609,12 +839,40 @@ function resetIntake(){
 modeConfirmBtn.addEventListener("click", function(){ mode="confirm"; resetIntake(); show("intake"); });
 modeOpenBtn.addEventListener("click", function(){
   mode="open"; resetIntake(); editRideFromScan.hidden = true;
-  expectedSummary.textContent = "Open identification — no booking details needed.";
+  /* Open mode has no expected vehicle, so the summary has nothing to say.
+     Which mode you are in is the h2's job now. */
+  expectedSummary.textContent = ""; expectedSummary.hidden = true;
+  matchLine = "";
   clearResults(); show("scan");
 });
 editRideFromScan.addEventListener("click", function(){
   stopLive(); stopGuidance(); stopCamera(); show("intake");
 });
+
+/* Minimalistic Region A. One braille line, state word always present, and a
+   qualifier only where the verdict rests on part of the evidence - so the
+   qualifier's presence is itself the signal, and its absence means everything
+   agreed. Standard mode is untouched and keeps its existing suffix. */
+function hasDescriptors(){
+  return !!(expected && (expected.colour || expected.brand || expected.model));
+}
+function minimalLine(j){
+  if(j.state === "match")
+    return (j.mismatched_fields && j.mismatched_fields.length)
+      ? "Matched by car plate." : "Matched.";
+  if(j.state === "mismatch")  return "Mismatch. Not your car.";
+  if(j.state === "potential") return "Potential match by description.";
+  return hasDescriptors() ? "Uncertain. Image too unclear."
+                          : "Uncertain. No details to check.";
+}
+
+/* Leaving a match - by dismissing the dialog or stepping back from guidance -
+   drops it completely, so the app reads as if verification had just started. */
+function clearMatch(){
+  matchLine = "";
+  if(mode === "confirm" && expected) expectedSummary.textContent = describe(expected);
+  clearResults();
+}
 
 function clearResults(){ setVerdict("",""); setDetail(""); setStatus(""); }
 
@@ -713,7 +971,9 @@ editRideBtn.addEventListener("click", function(){
 });
 confirmRideBtn.addEventListener("click", function(){
   editRideFromScan.hidden = false;
-  expectedSummary.textContent = "Looking for: " + describe(expected);
+  expectedSummary.hidden = false;
+  expectedSummary.textContent = describe(expected);
+  matchLine = "";
   clearResults(); show("scan");
 });
 
@@ -750,6 +1010,7 @@ startCam.addEventListener("click", function(){
     else if(err && err.name === "NotFoundError") m = "No camera found on this device.";
     else if(location.protocol !== "https:" && location.hostname !== "localhost") m = "The camera needs a secure (https) connection.";
     setVerdict(m, "error");
+    playCue("error");
   });
 });
 
@@ -813,10 +1074,16 @@ var GUIDE_PROMPT =
 /* =======================================================================
    VERIFICATION
    ======================================================================= */
-function runScan(isLive){
-  if(busy || phase === "guiding") return;
+/* A manual press is a total override. The user has deliberately framed this
+   shot, so it jumps the busy guard and supersedes anything already in flight -
+   an auto poll fired two seconds ago was pointed at wherever the camera
+   happened to be, which makes its answer not merely staler but less intended. */
+function runScan(isLive, manual){
+  if(phase === "guiding" || phase === "ended") return;
+  if(busy && !manual) return;
   var b64 = capture(1600);
   if(!b64){ setStatus("Camera not ready yet."); return; }
+  var gen = ++scanGen;
   busy = true;
   if(!isLive) identifyBtn.disabled = true;
   setStatus(isLive ? "Scanning..." : "Reading the car...");
@@ -825,10 +1092,12 @@ function runScan(isLive){
                 {type:"text",text: mode==="confirm" ? confirmPrompt() : OPEN_PROMPT}];
 
   callClaude(blocks, 400).then(function(j){
+    if(gen !== scanGen) return;            // superseded; stay quiet
     busy = false; if(!isLive) identifyBtn.disabled = false;
     errStreak = 0; lastErrText = "";
     handleResult(j, isLive);
   }).catch(function(e){
+    if(gen !== scanGen) return;
     busy = false; if(!isLive) identifyBtn.disabled = false;
     setStatus("");
     reportScanError(e, isLive);
@@ -842,6 +1111,10 @@ function runScan(isLive){
 function reportScanError(e, isLive){
   var msg = "Scan failed. " + e.message;
   errStreak++;
+  /* The tone fires on every failure even though the text dedupes. Text
+     carries information and should not repeat; the tone carries the fact
+     that a shot happened at all, and that is true every time. */
+  playCue("error");
   var stopNow = /Too many requests|Access code/i.test(e.message) || errStreak >= 3;
   if(isLive && stopNow){
     stopLive();
@@ -853,10 +1126,16 @@ function reportScanError(e, isLive){
 }
 
 function handleResult(j, isLive){
+  /* One cue per shot, always. Nothing that reaches this function may end
+     in silence: a verdict plays its own cue, and everything else plays the
+     response tone. In Live that matters most - the text does not change
+     from poll to poll, so a screen reader stops re-announcing it, and
+     without a tone a running session is indistinguishable from a dead one. */
   if(!j.vehicle_detected){
     noCarStreak++;
     setVerdict("No car detected","");
     setDetail(j.detail || "Point the camera toward the car.");
+    playCue("respond");
     if(isLive) retune();
     return;
   }
@@ -870,6 +1149,7 @@ function handleResult(j, isLive){
     var name = parts.length ? parts.join(" ") : "Car";
     setVerdict(name + (j.plate ? (", plate "+j.plate) : ", plate not legible"), "");
     setDetail([ORIENT[j.orientation]||"", j.detail||""].filter(Boolean).join(" "));
+    playCue("respond");     // open mode has no verdict to sound
     return;
   }
 
@@ -877,24 +1157,27 @@ function handleResult(j, isLive){
   if(j.matched_fields && j.matched_fields.length) fields.push(j.matched_fields.join(" and ")+" match");
   if(j.mismatched_fields && j.mismatched_fields.length) fields.push(j.mismatched_fields.join(" and ")+" different");
   var suffix = (minimal() || !fields.length) ? "" : ". " + fields.join(", ");
+  /* Minimalistic keeps Region A to one line, so the basis moves to Region B
+     rather than being thrown away - shortened, not destroyed. */
+  var basis = minimal() ? fields.join(", ") : "";
 
   // Region A carries the verdict. Region B carries orientation + detail.
   // The two never overlap, so nothing is announced twice.
   var orient = ORIENT[j.orientation] || "";
 
   if(j.state === "match"){
-    latchMatch(j, fields);
+    latchMatch(j, fields, basis);
   } else if(j.state === "potential"){
-    setVerdict("Potential match" + suffix, "potential");
-    setDetail([orient, j.detail||""].filter(Boolean).join(" "));
+    setVerdict(minimal() ? minimalLine(j) : ("Potential match" + suffix), "potential");
+    setDetail([basis, orient, j.detail||""].filter(Boolean).join(" "));
     playCue("potential");
   } else if(j.state === "mismatch"){
-    setVerdict("Mismatch" + suffix, "mismatch");
-    setDetail(j.detail || "");          // orientation omitted: not your car
+    setVerdict(minimal() ? minimalLine(j) : ("Mismatch" + suffix), "mismatch");
+    setDetail([basis, j.detail||""].filter(Boolean).join(" "));   // orientation omitted: not your car
     playCue("mismatch");
   } else {
-    setVerdict("Uncertain", "uncertain");
-    setDetail([orient, j.detail||"Move closer and try again."].filter(Boolean).join(" "));
+    setVerdict(minimal() ? minimalLine(j) : "Uncertain", "uncertain");
+    setDetail([basis, orient, j.detail||"Move closer and try again."].filter(Boolean).join(" "));
     playCue("uncertain");
   }
 }
@@ -915,13 +1198,17 @@ function retune(){
    Once matched, the app stops asking "is this my car?". It cannot say
    mismatch afterwards, because that question is closed.
    ======================================================================= */
-function latchMatch(j, fields){
+function latchMatch(j, fields, basis){
   stopLive();
   phase = "latched";
-  var line = "Match" + (fields.length && !minimal() ? ". " + fields.join(", ") : "");
+  var line = minimal() ? minimalLine(j)
+                       : ("Match" + (fields.length ? ". " + fields.join(", ") : ""));
+  matchLine = line;
   setVerdict(line, "match");
-  setDetail([ORIENT[j.orientation]||"", j.detail||""].filter(Boolean).join(" "));
+  setDetail([basis||"", ORIENT[j.orientation]||"", j.detail||""].filter(Boolean).join(" "));
   playCue("match");
+  if(mode === "confirm" && expected)
+    expectedSummary.textContent = "Matched: " + describe(expected);
 
   dlgVerdict.textContent = "Match";
   dlgDetail.textContent = fields.length ? fields.join(", ") + "." : "This is the car you booked.";
@@ -930,6 +1217,7 @@ function latchMatch(j, fields){
 
   // Announce once more shortly after, in case the first was missed.
   setTimeout(function(){ if(phase === "latched"){ speak(line); playCue("match"); } }, 3200);
+  syncScanLabels();
 }
 
 function focusables(){
@@ -958,9 +1246,11 @@ function trap(e){
 function dismissDialog(){
   closeDialog();
   phase = "verify";
+  clearMatch();
   liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
-  identifyBtn.disabled = false;
-  setStatus("Stopped. Start Live again to re-check the same car.");
+  identifyBtn.textContent = "Identify"; identifyBtn.disabled = !stream;
+  setStatus("Ready to verify.");
+  syncScanLabels(); syncBack();
 }
 dlgDismiss.addEventListener("click", dismissDialog);
 dlgGuidance.addEventListener("click", function(){ closeDialog(); startGuidance(); });
@@ -970,52 +1260,104 @@ dlgGuidance.addEventListener("click", function(){ closeDialog(); startGuidance()
    ======================================================================= */
 function startGuidance(){
   phase = "guiding"; lastGuide = ""; guideErrs = 0;
+  guideSince = 0; farStreak = 0;
   guideEnds = Date.now() + GUIDE_MS;
-  identifyBtn.textContent = "Verify again"; identifyBtn.disabled = false;
+  /* Editing booking details makes no sense while being walked to a car that
+     is already confirmed, and the bar keeps all three slots so its geometry
+     never shifts under a finger exploring by touch. */
+  editRideFromScan.hidden = true;
+  identifyBtn.textContent = "Check now"; identifyBtn.disabled = !stream;
   liveBtn.textContent = "Stop guidance"; liveBtn.classList.add("on");
   setVerdict("Guidance on", "match");
   setDetail("");
   setStatus("Guiding you to the car.");
-  guideStep();
-  guideTimer = setInterval(guideStep, 4000);
+  syncScanLabels(); syncBack();
+  guideStep(false);
+  restartGuideTimer();
 }
+function restartGuideTimer(){
+  if(guideTimer) clearInterval(guideTimer);
+  guideTimer = setInterval(function(){ guideStep(false); }, GUIDE_EVERY);
+}
+
+/* Guidance ends where it ran. Sending the user back to verification would
+   presume they want to verify again, when they are most likely getting into
+   the car. The match stays on screen and the bar offers another window. */
+function endGuidance(msg){
+  if(guideTimer){ clearInterval(guideTimer); guideTimer = null; }
+  guideGen++;                       // nothing still in flight may speak
+  phase = "ended";
+  identifyBtn.textContent = "Check now"; identifyBtn.disabled = !stream;
+  liveBtn.textContent = "Start guidance again"; liveBtn.classList.remove("on");
+  setVerdict((msg || "Guidance finished.") + (matchLine ? " " + matchLine : ""), "match");
+  setStatus("");
+  syncScanLabels(); syncBack();
+}
+
+/* Full stop: camera off, or stepping back to verification. */
 function stopGuidance(){
   if(guideTimer){ clearInterval(guideTimer); guideTimer = null; }
-  if(phase === "guiding"){
+  guideGen++;
+  if(phase === "guiding" || phase === "ended"){
     phase = "verify";
     identifyBtn.textContent = "Identify";
     liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
+    editRideFromScan.hidden = (mode !== "confirm");
   }
 }
-function guideStep(){
-  if(Date.now() > guideEnds){
-    stopGuidance();
-    setVerdict("", ""); setDetail("");
-    setStatus("Guidance finished.");
-    return;
-  }
-  if(busy) return;
+function guideStep(manual){
+  if(!manual && phase !== "guiding") return;
+  if(!manual && Date.now() > guideEnds){ endGuidance("Guidance finished."); return; }
+  if(busy && !manual) return;
   var b64 = capture(800);          // guidance does not need plate resolution
   if(!b64) return;
+  var gen = ++guideGen;
   busy = true;
+  /* A manual shot replaces the next scheduled poll rather than adding to it,
+     which keeps the token cost pinned to the polling rate however often the
+     button is pressed. */
+  if(manual && phase === "guiding"){ guideSince = 0; restartGuideTimer(); }
+
   callClaude([{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
               {type:"text",text:GUIDE_PROMPT}], 200, "claude-haiku-4-5-20251001")
   .then(function(j){
+    if(gen !== guideGen) return;   // superseded, or guidance has since ended
     busy = false; guideErrs = 0;
+
+    /* Two consecutive misses before declaring the car lost, back to found on
+       the first sighting: slow to alarm, quick to reassure. A pedestrian
+       crossing the lens should not flip the chime back and forth. */
+    if(j.car_visible === false) farStreak++; else farStreak = 0;
+    var far = farStreak >= 2;
+
     var msg;
-    if(!j.car_visible || j.guidance_level === "unclear") msg = "Lost sight of the car.";
+    if(far) msg = "Lost sight of the car.";
+    else if(j.car_visible === false) msg = lastGuide || "Car in view.";
+    else if(j.guidance_level === "unclear") msg = "Car in view. Hold steady.";
     else if(j.guidance_level === "handle") msg = j.guidance || (ORIENT[j.orientation]||"Car in view.");
     else msg = ORIENT[j.orientation] || j.guidance || "Car in view.";
-    if(msg !== lastGuide){          // only announce genuine changes
-      lastGuide = msg;
+
+    /* A chime on every response, whichever way it went. Silence at the moment
+       of boarding reads as a stall, and this is the only liveness signal a
+       deafblind user has once the haptic is counted. */
+    playCue(far ? "guideFar" : "guideNear");
+
+    /* Repeat is counted in responses, not milliseconds, so it stays aligned
+       to the poll and needs no second timer to leak. Every 2nd response when
+       lost, every 3rd when the car is in view. */
+    guideSince++;
+    var floor = far ? 2 : 3;
+    if(manual || msg !== lastGuide || guideSince >= floor){
+      lastGuide = msg; guideSince = 0;
       setDetail(msg);
       if(!minimal()) speak(msg);
     }
   }).catch(function(){
+    if(gen !== guideGen) return;
     busy = false;
+    if(manual){ setVerdict("Could not check just now.", "error"); return; }
     if(++guideErrs >= 3){
-      stopGuidance();
-      setStatus("");
+      endGuidance("Guidance stopped. The scan keeps failing.");
       setVerdict("Guidance stopped. The scan keeps failing.", "error");
     }
   });
@@ -1025,28 +1367,63 @@ function guideStep(){
    BUTTONS
    ======================================================================= */
 identifyBtn.addEventListener("click", function(){
-  if(phase === "guiding"){ stopGuidance(); clearResults(); setStatus("Back to verifying."); return; }
-  runScan(false);
+  /* In guidance the centre slot is a fresh shot, not a replay: the car may
+     have crept forward inside the four-second window. In the terminal state
+     it takes that one shot without restarting the session. */
+  if(phase === "guiding" || phase === "ended"){ guideStep(true); return; }
+  runScan(false, true);
 });
 
 liveBtn.addEventListener("click", function(){
-  if(phase === "guiding"){ stopGuidance(); setStatus("Guidance stopped."); return; }
+  if(phase === "guiding"){ endGuidance("Guidance stopped."); return; }
+  if(phase === "ended"){ startGuidance(); return; }
   if(liveTimer){ stopLive(); setStatus("Live stopped."); return; }
   noCarStreak = 0; retune.cur = BASE_MS; errStreak = 0; lastErrText = "";
   liveBtn.textContent = "Stop Live"; liveBtn.classList.add("on");
   identifyBtn.disabled = true;
   setStatus("Live running.");
+  startCountdown();
   runScan(true);
   liveTimer = setInterval(function(){ runScan(true); }, BASE_MS);
   sessionCap = setTimeout(function(){
-    stopLive(); setStatus("Live stopped automatically after five minutes.");
+    stopLive();
+    /* No cue and no announcement: the five minutes were stated before you
+       started, the countdown was readable throughout, and the button now
+       says Start Live again. The ending is predicted, not reported. */
+    setStatus("Live stopped after five minutes.");
   }, SESSION_MS);
 });
+
+/* Reads as words rather than a clock face, since it is spoken as often as
+   it is seen. */
+function leftText(ms){
+  var s = Math.max(0, Math.round(ms/1000)), m = Math.floor(s/60);
+  s = s - m*60;
+  if(m && s) return m + (m>1?" minutes ":" minute ") + s + (s>1?" seconds left":" second left");
+  if(m)      return m + (m>1?" minutes left":" minute left");
+  return s + " seconds left";
+}
+function startCountdown(){
+  liveEnds = Date.now() + SESSION_MS;
+  liveLeft.hidden = false;
+  liveLeft.textContent = leftText(SESSION_MS);
+  if(liveTick) clearInterval(liveTick);
+  liveTick = setInterval(function(){
+    var ms = liveEnds - Date.now();
+    if(ms <= 0){ liveLeft.textContent = "Time is up."; return; }
+    liveLeft.textContent = leftText(ms);
+  }, 1000);
+}
+function stopCountdown(){
+  if(liveTick){ clearInterval(liveTick); liveTick = null; }
+  liveLeft.hidden = true; liveLeft.textContent = "";
+}
 
 function stopLive(){
   if(liveTimer){ clearInterval(liveTimer); liveTimer = null; }
   if(sessionCap){ clearTimeout(sessionCap); sessionCap = null; }
-  if(phase !== "guiding"){
+  stopCountdown();
+  if(phase !== "guiding" && phase !== "ended"){
     liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
     identifyBtn.disabled = !stream;
   }
