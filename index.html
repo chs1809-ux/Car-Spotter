@@ -35,6 +35,9 @@
   textarea{min-height:80px;resize:vertical}
   input[type=file]{width:100%;padding:10px 0;color:var(--text)}
   input[type=checkbox]{width:26px;height:26px;accent-color:var(--accent);flex:0 0 auto}
+  .fieldRow{display:flex;gap:8px;align-items:stretch}
+  .fieldRow input{flex:1}
+  .fieldRow button{width:auto;flex:0 0 auto;margin-top:0;min-height:0;padding:0 16px}
   button{font:inherit;border:none;border-radius:12px;padding:14px 18px;cursor:pointer}
   button.primary{background:var(--accent);color:#fff;width:100%;font-size:1.1rem;min-height:60px;margin-top:14px}
   button.secondary{background:#24262c;color:var(--text);width:100%;min-height:54px;margin-top:10px}
@@ -65,8 +68,17 @@
     padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
     background:#101115;border-top:1px solid #26282e;z-index:20}
   #actionBar button{flex:1;margin-top:0;min-height:66px;font-size:.82rem;padding:8px 6px;line-height:1.2}
+  /* Two fixed lines, so the bar never reflows when Live starts or stops.
+     A layout learned by touch should not move under the finger. */
+  #liveBtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+  #liveSub{font-size:.72rem;opacity:.85;font-variant-numeric:tabular-nums}
   #dialogBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:50;
     display:flex;align-items:center;justify-content:center;padding:20px}
+  #liveInfoBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:50;
+    display:flex;align-items:center;justify-content:center;padding:20px}
+  #liveInfoDialog{background:var(--card);border-radius:18px;padding:22px;max-width:460px;width:100%}
+  #liveInfoDialog button{width:100%;min-height:64px;margin-top:12px}
+  #liveInfoTitle{font-size:1.15rem;font-weight:700;margin:0 0 8px}
   #matchDialog{background:var(--card);border-radius:18px;padding:22px;max-width:460px;width:100%;
     border:2px solid var(--ok)}
   #dlgVerdict{font-size:1.35rem;font-weight:800;color:var(--ok);margin:0 0 8px}
@@ -101,9 +113,17 @@
     <p class="hint" id="settingsNote">Changes are saved when you go back.</p>
 
     <label for="apiKey">Access code</label>
-    <input type="password" id="apiKey" autocomplete="off" spellcheck="false"
-           placeholder="e.g. hongsen-4821" aria-describedby="key-hint">
-    <p class="hint" id="key-hint">Shared with Spotter on this device. Your Anthropic key stays on the server; this code only unlocks it.</p>
+    <!-- enterkeyhint relabels the keyboard's return key as Done on iOS and
+         Android. Pressing it does not close the keyboard by itself, so the
+         Enter handler blurs the field, which is what actually dismisses it. -->
+    <div class="fieldRow">
+      <input type="password" id="apiKey" autocomplete="off" spellcheck="false"
+             autocapitalize="none" enterkeyhint="done"
+             placeholder="e.g. word-1234" aria-describedby="key-hint">
+      <button type="button" id="revealKey" class="secondary"
+              aria-pressed="false" aria-label="Show access code">Show</button>
+    </div>
+    <p class="hint" id="key-hint">This code is for Car Spotter only and will not work in Spotter. Your Anthropic key stays on the server; this code only unlocks it.</p>
 
     <label for="modelSel">Model for confirming</label>
     <select id="modelSel">
@@ -201,12 +221,6 @@
       <h3 id="detailsHeading" hidden>Details</h3>
       <div id="detailStatic"></div>
 
-      <!-- Plain text, deliberately not a live region. It updates every second
-           while Live runs, so it can be read on demand by touch or swipe
-           without announcing itself sixty times. -->
-      <p id="liveNote" class="hint">Live checks every few seconds and stops on its own after five minutes.</p>
-      <p id="liveLeft" hidden></p>
-
       <div id="status"></div>
     </div>
   </section>
@@ -214,9 +228,20 @@
   <div id="actionBar" hidden>
     <button id="startCam" class="secondary">Start camera</button>
     <button id="identifyBtn" class="secondary" disabled>Identify</button>
-    <button id="liveBtn" class="secondary" disabled>Start Live</button>
+    <button id="liveBtn" class="secondary" disabled aria-label="Start Live, 5 minute limit"><span id="liveMain">Start Live</span><span id="liveSub">5 minute limit</span></button>
   </div>
 </main>
+
+<!-- ============ FIRST-RUN LIVE NOTICE ============ -->
+<div id="liveInfoBackdrop" hidden>
+  <div id="liveInfoDialog" role="dialog" aria-modal="true"
+       aria-labelledby="liveInfoTitle" aria-describedby="liveInfoBody" tabindex="-1">
+    <p id="liveInfoTitle">About Live</p>
+    <p id="liveInfoBody">Live keeps checking on its own every few seconds, so you can hold the phone up and wait. It stops by itself after five minutes to save battery and cost. The Live button shows how long is left, and you can start it again any time.</p>
+    <button id="liveInfoGo" class="primary">Start Live</button>
+    <button id="liveInfoCancel" class="secondary">Not now</button>
+  </div>
+</div>
 
 <!-- ================= MATCH DIALOG ================= -->
 <div id="dialogBackdrop" hidden>
@@ -249,7 +274,8 @@ if("serviceWorker" in navigator){
    a code that its proxy will reject. */
 var NS = "carspotter.";
 var K = {key:NS+"accessCode", model:NS+"model", speak:NS+"speak", cam:NS+"cam",
-         style:NS+"style", sound:NS+"sound", seen:NS+"seenVersion"};
+         style:NS+"style", sound:NS+"sound", seen:NS+"seenVersion",
+         liveSeen:NS+"liveNoticeSeen"};
 var PROXY_URL = "https://car-spotter-proxy.chs1809.workers.dev";
 var MAX_TOKENS = 400;   // the Worker caps at 400; asking for more is silently clamped
 
@@ -499,7 +525,6 @@ function syncScanLabels(){
   var t = scanLabel();
   scanH.textContent = t;
   tagline.textContent = t;
-  liveNote.hidden = (phase === "guiding" || phase === "ended");
 }
 function setTagline(name){
   if(name === "mode"){
@@ -534,7 +559,7 @@ function show(name){
     saveKey.hidden = !firstRun;
     settingsNote.hidden = firstRun;
   }
-  if(name === "scan"){ scanH.textContent = scanLabel(); liveNote.hidden = false; }
+  if(name === "scan") scanH.textContent = scanLabel();
   setTagline(name);
   syncBack();
   var h = screens[name].querySelector("h2");
@@ -548,7 +573,8 @@ function show(name){
 var $ = function(id){ return document.getElementById(id); };
 var apiKeyInput=$("apiKey"), modelSel=$("modelSel"), styleSel=$("styleSel"), styleHint=$("styleHint"),
     lensSel=$("lensSel"), lensHint=$("lensHint"), detectLenses=$("detectLenses"),
-    ttsToggle=$("ttsToggle"), soundToggle=$("soundToggle"), testCues=$("testCues"),
+    liveMain=$("liveMain"), liveSub=$("liveSub"),
+    revealKey=$("revealKey"), ttsToggle=$("ttsToggle"), soundToggle=$("soundToggle"), testCues=$("testCues"),
     saveKey=$("saveKey"), settingsNote=$("settingsNote"),
     modeConfirmBtn=$("modeConfirm"), modeOpenBtn=$("modeOpen"),
     rideText=$("rideText"), rideShot=$("rideShot"), parseRide=$("parseRide"),
@@ -559,7 +585,8 @@ var apiKeyInput=$("apiKey"), modelSel=$("modelSel"), styleSel=$("styleSel"), sty
     verdictEl=$("verdict"), detailLive=$("detailLive"), detailStatic=$("detailStatic"),
     detailsHeading=$("detailsHeading"), statusEl=$("status"),
     tagline=$("tagline"), scanH=$("scan-h"),
-    liveNote=$("liveNote"), liveLeft=$("liveLeft"),
+    liveInfoBackdrop=$("liveInfoBackdrop"), liveInfoDialog=$("liveInfoDialog"),
+    liveInfoGo=$("liveInfoGo"), liveInfoCancel=$("liveInfoCancel"),
     whatsNew=$("whatsNew"), whatsNewToggle=$("whatsNewToggle"),
     changelog=$("changelog"), newsHint=$("newsHint"), versionLine=$("versionLine"),
     backdrop=$("dialogBackdrop"), dialog=$("matchDialog"), dlgVerdict=$("dlgVerdict"),
@@ -671,7 +698,10 @@ var CHANGELOG = [
    "Scan errors are now announced properly instead of appearing silently. Live stops rather than retrying into a rate limit.",
    "Every check now makes a sound, including when no car is found, so you can tell Live is still running. Open identification too.",
    "Server and connection problems have their own distinct sound.",
-   "Live states up front that it stops after five minutes, and shows the time remaining while it runs.",
+   "The Live button now shows how long is left in the session, and reads the remaining time when you touch it.",
+   "A short explanation of Live appears the first time you use it.",
+   "The access code field has a Show and Hide button, and the keyboard's return key now says Done and closes the keyboard.",
+   "The access code example no longer uses a personal name, and the note now says the code is for Car Spotter only.",
    "This What's new list."
  ]},
  { v:"2.0.0", items:[
@@ -767,6 +797,7 @@ saveKey.addEventListener("click", function(){
 });
 
 function leaveSettings(){
+  hideKey();
   persistSettings();
   var dest = settingsReturn || "mode"; settingsReturn = null;
   show(dest);
@@ -797,6 +828,36 @@ headerBack.addEventListener("click", function(){
   }
   stopLive(); stopGuidance(); stopCamera(); show("mode");
 });
+
+/* A reveal control is genuinely two-state - shown or hidden - rather than
+   one action with two effects, so aria-pressed is right here even though it
+   would be wrong on the Live button. The label changes too, since some
+   screen readers report pressed state tersely or not at all. */
+revealKey.addEventListener("click", function(){
+  var shown = apiKey.type === "text";
+  var pos = apiKey.selectionStart, end = apiKey.selectionEnd;
+  apiKey.type = shown ? "password" : "text";
+  revealKey.textContent = shown ? "Show" : "Hide";
+  revealKey.setAttribute("aria-pressed", shown ? "false" : "true");
+  revealKey.setAttribute("aria-label", shown ? "Show access code" : "Hide access code");
+  /* Switching type drops focus in some browsers; put it back where it was so
+     the keyboard does not close mid-edit. */
+  try{ apiKey.focus(); if(pos !== null) apiKey.setSelectionRange(pos, end); }catch(e){}
+});
+
+/* Done on the keyboard fires Enter here. Blurring is the only thing a web
+   page can do that reliably makes iOS put the keyboard away. */
+apiKey.addEventListener("keydown", function(e){
+  if(e.key === "Enter"){ e.preventDefault(); apiKey.blur(); }
+});
+
+/* Never leave the code on screen after the field is done with. */
+function hideKey(){
+  apiKey.type = "password";
+  revealKey.textContent = "Show";
+  revealKey.setAttribute("aria-pressed","false");
+  revealKey.setAttribute("aria-label","Show access code");
+}
 
 testCues.addEventListener("click", function(){
   var seq = ["match","potential","uncertain","mismatch","respond","error"], i = 0;
@@ -1247,7 +1308,7 @@ function dismissDialog(){
   closeDialog();
   phase = "verify";
   clearMatch();
-  liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
+  setLiveBtn("Start Live", "5 minute limit", "Start Live, 5 minute limit"); liveBtn.classList.remove("on");
   identifyBtn.textContent = "Identify"; identifyBtn.disabled = !stream;
   setStatus("Ready to verify.");
   syncScanLabels(); syncBack();
@@ -1267,7 +1328,7 @@ function startGuidance(){
      never shifts under a finger exploring by touch. */
   editRideFromScan.hidden = true;
   identifyBtn.textContent = "Check now"; identifyBtn.disabled = !stream;
-  liveBtn.textContent = "Stop guidance"; liveBtn.classList.add("on");
+  setLiveBtn("Stop guidance", "", "Stop guidance"); liveBtn.classList.add("on");
   setVerdict("Guidance on", "match");
   setDetail("");
   setStatus("Guiding you to the car.");
@@ -1288,7 +1349,7 @@ function endGuidance(msg){
   guideGen++;                       // nothing still in flight may speak
   phase = "ended";
   identifyBtn.textContent = "Check now"; identifyBtn.disabled = !stream;
-  liveBtn.textContent = "Start guidance again"; liveBtn.classList.remove("on");
+  setLiveBtn("Start guidance again", "", "Start guidance again"); liveBtn.classList.remove("on");
   setVerdict((msg || "Guidance finished.") + (matchLine ? " " + matchLine : ""), "match");
   setStatus("");
   syncScanLabels(); syncBack();
@@ -1301,7 +1362,7 @@ function stopGuidance(){
   if(phase === "guiding" || phase === "ended"){
     phase = "verify";
     identifyBtn.textContent = "Identify";
-    liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
+    setLiveBtn("Start Live", "5 minute limit", "Start Live, 5 minute limit"); liveBtn.classList.remove("on");
     editRideFromScan.hidden = (mode !== "confirm");
   }
 }
@@ -1374,12 +1435,48 @@ identifyBtn.addEventListener("click", function(){
   runScan(false, true);
 });
 
+/* Shown once, ever. There is no "do not show again" box because showing it
+   once already means it never returns - a checkbox would be a control that
+   does nothing. The five-minute limit still lives on the button afterwards,
+   which is where it is needed. */
+var liveInfoFocus = null;
+function openLiveInfo(){
+  liveInfoFocus = document.activeElement;
+  liveInfoBackdrop.hidden = false;
+  setTimeout(function(){ liveInfoDialog.focus(); }, 40);
+  document.addEventListener("keydown", trapLiveInfo, true);
+}
+function closeLiveInfo(){
+  liveInfoBackdrop.hidden = true;
+  document.removeEventListener("keydown", trapLiveInfo, true);
+  if(liveInfoFocus && liveInfoFocus.focus) liveInfoFocus.focus();
+}
+function trapLiveInfo(e){
+  if(liveInfoBackdrop.hidden) return;
+  if(e.key === "Escape"){ e.preventDefault(); sset(K.liveSeen,"1"); closeLiveInfo(); return; }
+  if(e.key !== "Tab") return;
+  var f = [liveInfoGo, liveInfoCancel], i = f.indexOf(document.activeElement);
+  e.preventDefault();
+  f[(i + (e.shiftKey ? f.length-1 : 1) + f.length) % f.length].focus();
+}
+liveInfoGo.addEventListener("click", function(){
+  sset(K.liveSeen,"1"); closeLiveInfo(); beginLive();
+});
+liveInfoCancel.addEventListener("click", function(){
+  sset(K.liveSeen,"1"); closeLiveInfo();
+});
+
 liveBtn.addEventListener("click", function(){
   if(phase === "guiding"){ endGuidance("Guidance stopped."); return; }
   if(phase === "ended"){ startGuidance(); return; }
   if(liveTimer){ stopLive(); setStatus("Live stopped."); return; }
+  if(!sget(K.liveSeen)){ openLiveInfo(); return; }
+  beginLive();
+});
+
+function beginLive(){
   noCarStreak = 0; retune.cur = BASE_MS; errStreak = 0; lastErrText = "";
-  liveBtn.textContent = "Stop Live"; liveBtn.classList.add("on");
+  paintLive(SESSION_MS); liveBtn.classList.add("on");
   identifyBtn.disabled = true;
   setStatus("Live running.");
   startCountdown();
@@ -1392,7 +1489,23 @@ liveBtn.addEventListener("click", function(){
        says Start Live again. The ending is predicted, not reported. */
     setStatus("Live stopped after five minutes.");
   }, SESSION_MS);
-});
+}
+
+/* The Live button is the only indicator of Live's state, so it carries the
+   countdown too. The visible sub-line ticks every second; the accessible
+   name is rebuilt alongside it, so touching the button reads the current
+   time and nothing is announced when you are not on it.
+
+   The name is not frozen while focused. Under explore by touch the page
+   never sees the touches, and lifting and re-touching re-reads whatever
+   the name says at that moment - a frozen name would hand back a stale
+   time on exactly the second read the user made deliberately. */
+function setLiveBtn(main, sub, name){
+  liveMain.textContent = main;
+  liveSub.textContent = sub || "";
+  liveSub.hidden = !sub;
+  liveBtn.setAttribute("aria-label", name || (sub ? main + ", " + sub : main));
+}
 
 /* Reads as words rather than a clock face, since it is spoken as often as
    it is seen. */
@@ -1403,20 +1516,25 @@ function leftText(ms){
   if(m)      return m + (m>1?" minutes left":" minute left");
   return s + " seconds left";
 }
+function clockText(ms){
+  var t = Math.max(0, Math.round(ms/1000)), m = Math.floor(t/60), sec = t - m*60;
+  return m + ":" + (sec < 10 ? "0" : "") + sec;
+}
+function paintLive(ms){
+  setLiveBtn("Stop Live", clockText(ms) + " left", "Stop Live, " + leftText(ms));
+}
 function startCountdown(){
   liveEnds = Date.now() + SESSION_MS;
-  liveLeft.hidden = false;
-  liveLeft.textContent = leftText(SESSION_MS);
+  paintLive(SESSION_MS);
   if(liveTick) clearInterval(liveTick);
   liveTick = setInterval(function(){
     var ms = liveEnds - Date.now();
-    if(ms <= 0){ liveLeft.textContent = "Time is up."; return; }
-    liveLeft.textContent = leftText(ms);
+    if(ms <= 0){ paintLive(0); return; }
+    paintLive(ms);
   }, 1000);
 }
 function stopCountdown(){
   if(liveTick){ clearInterval(liveTick); liveTick = null; }
-  liveLeft.hidden = true; liveLeft.textContent = "";
 }
 
 function stopLive(){
@@ -1424,7 +1542,7 @@ function stopLive(){
   if(sessionCap){ clearTimeout(sessionCap); sessionCap = null; }
   stopCountdown();
   if(phase !== "guiding" && phase !== "ended"){
-    liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
+    setLiveBtn("Start Live", "5 minute limit", "Start Live, 5 minute limit"); liveBtn.classList.remove("on");
     identifyBtn.disabled = !stream;
   }
 }
