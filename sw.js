@@ -3,7 +3,7 @@
    This ordering is the point: a deploy is picked up on the next online
    load, which is what fixes a home-screen shortcut serving a stale build.
    The Cloudflare Worker is never intercepted. */
-var CACHE = "car-spotter-v2.4.0";
+var CACHE = "car-spotter-v2.5.1";
 
 self.addEventListener("install", function () { self.skipWaiting(); });
 

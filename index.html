@@ -121,12 +121,12 @@
     </div>
     <p class="hint">Given to you by the administrator.</p>
 
-    <label for="modelSel">Model for confirming</label>
+    <label for="modelSel">Model for scanning</label>
     <select id="modelSel">
-      <option value="claude-sonnet-5">Sonnet 5 (recommended)</option>
-      <option value="claude-haiku-4-5-20251001">Haiku 4.5 (cheaper, less accurate on plates)</option>
+      <option value="claude-haiku-5-5" selected>Haiku 5.5 (default, faster)</option>
+      <option value="claude-sonnet-5-5">Sonnet 5.5 (every check)</option>
     </select>
-    <p class="hint">Guidance mode always uses Haiku, since it only needs to judge orientation.</p>
+    <p class="hint">Either way, a match is checked twice before it is announced.</p>
 
     <label for="styleSel">Output style</label>
     <select id="styleSel">
@@ -158,7 +158,7 @@
       <summary id="whatsNewToggle">What's new</summary>
       <div id="changelog"></div>
     </details>
-    <p class="hint" id="versionLine">Car Spotter version 2.4.0</p>
+    <p class="hint" id="versionLine">Car Spotter version 2.5.1</p>
   </section>
 
   <!-- ================= MODE ================= -->
@@ -266,17 +266,26 @@ if("serviceWorker" in navigator){
 var NS = "carspotter.";
 var K = {key:NS+"accessCode", model:NS+"model", speak:NS+"speak", cam:NS+"cam",
          style:NS+"style", sound:NS+"sound", seen:NS+"seenVersion"};
-var PROXY_URL = "https://car-spotter-proxy.chs1809.workers.dev";
+var PROXY_URL = "https://car-spotter-api.earshot.works";
 var MAX_TOKENS = 400;   // the Worker caps at 400; asking for more is silently clamped
 
-/* Capture widths. Image tokens scale with pixel count, so this is the single
-   biggest lever on what a scan costs: 1600 wide is about 2560 tokens, 1280 is
-   about 1640, 1024 is about 1050. 1280 is the middle setting - it keeps the
-   plate comfortably above the resolution where OCR starts guessing between 8
-   and B, while taking roughly a third off every verification. Guidance is
-   asking where a car is, not what it says, and 800 has always been enough. */
-var SHOT_W  = 1280;
+/* Capture widths. The distance at which a plate can be read grows in
+   proportion to width, so this is how early Live can read an approaching car:
+   1920 reads about one and a half times further than the old 1280. It is also
+   the camera's own ceiling - the stream is requested at 1920 wide, and any
+   value above what the camera delivers changes nothing. On Haiku the extra
+   tokens cost almost nothing; the real price is upload size and encode time
+   on slower phones, and 1600 is the fallback if that shows up in the logs.
+   Guidance asks where a car is, not what it says, so 800 stays. */
+var SHOT_W  = 1920;
 var GUIDE_W = 800;
+
+/* Models. Haiku screens, Sonnet confirms. The Worker enforces which tasks may
+   use which model and sets the thinking options; the app only says what it is
+   doing. Guidance and reading the booking are always Haiku. */
+var M_HAIKU  = "claude-haiku-5-5";
+var M_SONNET = "claude-sonnet-5-5";
+function scanModel(){ return sget(K.model) === M_SONNET ? M_SONNET : M_HAIKU; }
 
 function sget(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
 function sset(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
@@ -741,7 +750,7 @@ var apiKeyInput=$("apiKey"), maskBtn=$("maskBtn"), modelSel=$("modelSel"), style
 var mode = "confirm";          // "confirm" | "open"
 var expected = null;
 var stream = null, busy = false;
-var liveTimer = null, sessionCap = null;
+var liveTimer = null, sessionCap = null, liveOn = false, shotStart = 0, potStreak = 0;
 var phase = "verify";          // "verify" | "latched" | "guiding" | "ended"
 var guideTimer = null, guideEnds = 0, lastGuide = "";
 var noCarStreak = 0;
@@ -750,7 +759,11 @@ var matchLine = "";            // the verdict text to restore when guidance ends
 var guideSince = 0;            // responses since the cue was last spoken
 var farStreak = 0;             // consecutive out-of-sight responses (hysteresis)
 var scanGen = 0, guideGen = 0; // a manual shot supersedes anything still in flight
-var BASE_MS = 5000, MAX_MS = 12000, SESSION_MS = 5*60*1000, GUIDE_MS = 60*1000;
+/* Live polls every 4 seconds, matching guidance, so the app keeps one tempo.
+   There is no back-off any more: it slowed down on an empty kerb, which is
+   exactly the moment before the car turns in. It existed to save Sonnet
+   money, and with Haiku screening that reason is gone. */
+var LIVE_MS = 4000, LIVE_FLOOR_MS = 1000, SESSION_MS = 5*60*1000, GUIDE_MS = 60*1000;
 var GUIDE_EVERY = 4000;
 var lastFocus = null;
 var newsPending = false;
@@ -822,8 +835,21 @@ function loadSettings(){
    says what changed for them rather than what changed in the code - but
    it doubles as the record of what this build actually contains.
    ======================================================================= */
-var VERSION = "2.4.0";
+var VERSION = "2.5.1";
 var CHANGELOG = [
+ { v:"2.5.1", items:[
+   "The model choice in Settings now applies to Identify a car as well as to confirming your ride."
+ ]},
+ { v:"2.5.0", items:[
+   "Checks now run on Haiku 5.5 by default: faster, and much cheaper to run. Sonnet 5.5 is still available in Settings.",
+   "A match is now always checked a second time, by Sonnet, before it is announced. You hear \"Plate matches, confirming\" first, then the result.",
+   "If the second check disagrees, you are told it was not confirmed, and checking carries on.",
+   "When the plate cannot be read, Sonnet now takes a second look now and then, and can upgrade a potential match to a confirmed one.",
+   "Plates that cannot be real Singapore plates are treated as misreads, not as evidence.",
+   "Photos are taken at a higher resolution, so plates can be read from further away.",
+   "Live now checks every 4 seconds throughout, instead of slowing down while no car is in view.",
+   "If a check takes longer than usual, the next one follows straight after, instead of waiting a whole extra interval."
+ ]},
  { v:"2.4.0", items:[
    "A shutter sound now marks the moment each photo is taken, so you know which moment the spoken result is describing.",
    "Pressing a button to check gives a slightly heavier shutter than automatic checking does.",
@@ -1095,10 +1121,10 @@ function fileToB64(f){
    every call carries its own deadline and fails loudly when it passes. */
 var CALL_TIMEOUT_MS = 15000;
 
-function callClaude(blocks, maxTokens, modelOverride, isLive){
+function callClaude(blocks, maxTokens, modelOverride, isLive, task){
   var code = sget(K.key);
   if(!code) return Promise.reject(new Error("This needs an access code. Add one in Settings."));
-  var model = modelOverride || sget(K.model) || "claude-sonnet-5";
+  var model = modelOverride || scanModel();
 
   var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
   var timedOut = false;
@@ -1111,7 +1137,7 @@ function callClaude(blocks, maxTokens, modelOverride, isLive){
   var opts = {
     method:"POST",
     headers:{"content-type":"application/json", "x-passcode":code,
-             "x-scan-mode": isLive ? "live" : "manual"},
+             "x-scan-mode": isLive ? "live" : "manual", "x-task": task || "screen"},
     body:JSON.stringify({model:model,
                          max_tokens:Math.min(maxTokens||300, MAX_TOKENS),
                          messages:[{role:"user",content:blocks}]})
@@ -1183,7 +1209,7 @@ parseRide.addEventListener("click", function(){
       })
     : Promise.resolve([{type:"text",text:PARSE_PROMPT+" Description: "+txt}]);
 
-  p.then(function(b){ return callClaude(b,400); }).then(function(j){
+  p.then(function(b){ return callClaude(b, 400, M_HAIKU, false, "parse"); }).then(function(j){
     parseRide.disabled = false;
     if(!j.found){
       parsedEcho.textContent = "Could not find car details. " + (j.detail||"Try again with a clearer screenshot.");
@@ -1356,8 +1382,10 @@ function confirmPrompt(){
     "- plate NOT readable AND any provided descriptor contradicts -> mismatch\n"+
     "- plate NOT readable AND no descriptors provided, or the image is too unclear to judge -> uncertain\n"+
     "Never guess a plate character you cannot actually read.\n"+
+    "'plate_read' is the plate exactly as you read it in the photo, or null if you cannot read it. "+
+    "Report what is in the photo, not what was expected: never copy the expected plate into it.\n"+
     "Return ONLY minified JSON, no prose, no fences: "+
-    '{"vehicle_detected":true|false,"state":"match"|"potential"|"mismatch"|"uncertain",'+
+    '{"vehicle_detected":true|false,"state":"match"|"potential"|"mismatch"|"uncertain","plate_read":string|null,'+
     '"matched_fields":[string],"mismatched_fields":[string],'+
     '"orientation":"nose-facing"|"boot-facing"|"nose-left"|"nose-right"|"unclear",'+
     '"detail":string}. '+
@@ -1400,6 +1428,7 @@ function runScan(isLive, manual){
   if(busy && !manual) return;
   var gen = ++scanGen;
   busy = true;
+  shotStart = Date.now();
   if(!isLive) identifyBtn.disabled = true;
   setStatus(isLive ? "Scanning..." : "Reading the car...");
 
@@ -1410,27 +1439,131 @@ function runScan(isLive, manual){
 
   captureBest(SHOT_W, 3).then(function(b64){
    if(gen !== scanGen) return;
-   if(!b64){ busy = false; if(!isLive) identifyBtn.disabled = false;
-             setStatus("Camera not ready yet."); return; }
+   if(!b64){ setStatus("Camera not ready yet."); finishShot(isLive); return; }
 
+   var confirming = (mode === "confirm");
    var blocks = [{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
-                {type:"text",text: mode==="confirm" ? confirmPrompt() : OPEN_PROMPT}];
+                 {type:"text",text: confirming ? confirmPrompt() : OPEN_PROMPT}];
+   /* Both modes follow the selector, so Haiku and Sonnet can be compared on
+      open identify as well as on confirming. */
+   var model = scanModel();
+   /* A manual press is manual even inside Live. It is billed and rate-limited
+      as a deliberate act, which keeps it alive when automatic polling pauses. */
+   var auto = isLive && !manual;
 
-  /* A manual press is manual even inside Live. It is billed and rate-limited as
-     a deliberate act, which is what keeps the manual button alive when the
-     automatic poll has been paused. */
-   callClaude(blocks, 400, null, isLive && !manual).then(function(j){
+   callClaude(blocks, 400, model, auto, confirming ? "screen" : "identify").then(function(j){
     if(gen !== scanGen) return;            // superseded; stay quiet
-    busy = false; if(!isLive) identifyBtn.disabled = false;
     errStreak = 0; lastErrText = "";
+    if(!confirming){ handleResult(j, isLive); finishShot(isLive); return; }
+
+    j.state = effectiveState(j);
+    if(j.vehicle_detected && j.state === "match"){
+      confirmMatch(j, blocks, gen, isLive, auto);
+      return;                              // busy stays up until the second check lands
+    }
+    if(j.vehicle_detected && j.state === "potential"){
+      potStreak++;
+      handleResult(j, isLive);
+      /* Sonnet's eyesight may read a plate Haiku could not. Worth a look on the
+         first potential, every third one after, and every deliberate press,
+         so an approaching car that reads as potential for half a minute does
+         not send every shot to the expensive model. In Sonnet mode there is
+         nothing better to escalate to. */
+      if(model === M_HAIKU && (manual || potStreak % 3 === 1)){
+        escalatePotential(blocks, gen, isLive, auto);
+        return;
+      }
+      finishShot(isLive);
+      return;
+    }
+    potStreak = 0;
     handleResult(j, isLive);
+    finishShot(isLive);
    }).catch(function(e){
     if(gen !== scanGen) return;
-    busy = false; if(!isLive) identifyBtn.disabled = false;
     setStatus("");
     reportScanError(e, isLive);
+    finishShot(isLive);
    });
   });
+}
+
+/* =======================================================================
+   SECOND OPINION
+   A false Match puts someone in the wrong car; a false Mismatch costs a
+   retry. So the first model may only ever propose a match, and a match is
+   announced only once Sonnet has looked at the same frame and agreed. In
+   Sonnet mode that is Sonnet twice, which is still an independent second
+   read. The proposal is announced at once, so the wait for the second
+   check is never silent.
+   ======================================================================= */
+function confirmMatch(j, blocks, gen, isLive, auto){
+  setVerdict(minimal() ? "Checking match" : "Plate matches, confirming.", "potential");
+  setDetail("");
+  playCue("respond");     // the match chime is held back for the confirmed match
+
+  callClaude(blocks, 400, M_SONNET, auto, "verify").then(function(v){
+    if(gen !== scanGen) return;
+    v.state = effectiveState(v);
+    potStreak = 0;
+    if(v.vehicle_detected && v.state === "match"){
+      setStatus("");
+      handleResult(v, isLive);                       // latches, and stops Live
+    } else {
+      handleResult(v, isLive, "Not confirmed.");     // the second look disagreed
+    }
+    finishShot(isLive);
+  }).catch(function(){
+    if(gen !== scanGen) return;
+    /* Never latch on an unconfirmed match, even when the check itself failed. */
+    setVerdict(isLive ? "Could not confirm the match. Checking again."
+                      : "Could not confirm the match. Try again.", "uncertain");
+    playCue("error");
+    finishShot(isLive);
+  });
+}
+
+/* Potential has already been announced, so the second look only speaks if it
+   changes the answer: up to a confirmed match, or down to not your car. */
+function escalatePotential(blocks, gen, isLive, auto){
+  setStatus("Checking the plate...");
+  callClaude(blocks, 400, M_SONNET, auto, "verify").then(function(v){
+    if(gen !== scanGen) return;
+    setStatus("");
+    v.state = effectiveState(v);
+    if(v.vehicle_detected && v.state === "match"){ potStreak = 0; handleResult(v, isLive); }
+    else if(v.vehicle_detected && v.state === "mismatch"){ potStreak = 0; handleResult(v, isLive, "Not confirmed."); }
+    finishShot(isLive);
+  }).catch(function(){
+    if(gen !== scanGen) return;
+    setStatus("");
+    finishShot(isLive);
+  });
+}
+
+/* Closes out a shot: drops the busy guard and, if Live is running, lines up
+   the next shot. Only the shot that is still current gets here - anything
+   superseded by a manual press returned early - so exactly one shot ever
+   schedules the next. */
+function finishShot(isLive){
+  busy = false;
+  if(!isLive) identifyBtn.disabled = !stream;
+  scheduleLive();
+}
+
+/* Live is timed from the start of the previous shot, not from a fixed clock.
+   On a fixed clock a slow round trip - the match moment runs two models back
+   to back - loses the tick it overran and waits a whole extra interval, which
+   is exactly when the car is pulling in. Here the next shot is due LIVE_MS
+   after the last one started, or straight away if that has already passed,
+   with a short floor so the verdict cue is not stepped on by the next shutter. */
+function scheduleLive(){
+  if(!liveOn || liveTimer) return;
+  var wait = Math.max(LIVE_FLOOR_MS, shotStart + LIVE_MS - Date.now());
+  liveTimer = setTimeout(function(){
+    liveTimer = null;
+    if(liveOn) runScan(true, false);
+  }, wait);
 }
 
 /* Errors are actionable, so they belong in the assertive region rather than
@@ -1476,21 +1609,79 @@ function reportScanError(e, isLive){
   if(msg !== lastErrText){ lastErrText = msg; setVerdict(msg, "error"); }
 }
 
-function handleResult(j, isLive){
+/* =======================================================================
+   PLATE CHECKS
+   Singapore plates end in a checksum letter worked out from the rest of the
+   plate. A read that fails its own checksum is a misread, whatever the
+   model's confidence. The check only ever switches on when the booked plate
+   passes it - so an unusual plate format, or any slip in this algorithm,
+   turns the check off rather than blocking a real match.
+   ======================================================================= */
+var SG_CHECK = "AZYXUTSRPMLKJHGEDCB";
+function normPlate(p){ return (p == null ? "" : String(p)).toUpperCase().replace(/[^A-Z0-9]/g, ""); }
+/* true or false for a plate in the Singapore pattern, null for anything else */
+function plateCheck(p){
+  var m = /^([A-Z]{1,3})(\d{1,4})([A-Z])$/.exec(p);
+  if(!m) return null;
+  var pre = m[1].length >= 3 ? m[1].slice(-2) : m[1];   // only the last two prefix letters count
+  var a = pre.length === 2 ? pre.charCodeAt(0) - 64 : 0;
+  var b = pre.charCodeAt(pre.length - 1) - 64;
+  var d = ("0000" + m[2]).slice(-4);
+  var sum = a*9 + b*4 + (+d[0])*5 + (+d[1])*4 + (+d[2])*3 + (+d[3])*2;
+  return SG_CHECK.charAt(sum % 19) === m[3];
+}
+
+/* Applies two guards to whatever state a model returned.
+   1. A match must rest on the plate actually read. If the model reported
+      reading a different plate, it is not a match, whatever it called it.
+   2. A mismatch that rests on a plate which fails its checksum is a misread,
+      not evidence. If nothing else disagreed, the car is still in the running.
+   Neither guard can create a match. They only stop false ones. */
+function effectiveState(j){
+  var s = j.state;
+  if(!j.vehicle_detected || !expected) return s;
+  var exp = normPlate(expected.plate), read = normPlate(j.plate_read);
+  var otherDiffers = (j.mismatched_fields || []).some(function(f){ return !/plate/i.test(f); });
+  var fallback = otherDiffers ? "mismatch" : (hasDescriptors() ? "potential" : "uncertain");
+  /* When a guard sets the plate read aside, the plate is no longer a reason
+     either way, so it leaves the list of what differed - otherwise the line
+     would say "potential match, plate different", which contradicts itself. */
+  function setAside(){
+    j.mismatched_fields = (j.mismatched_fields || []).filter(function(f){ return !/plate/i.test(f); });
+    return fallback;
+  }
+
+  if(s === "match" && exp && read && read !== exp) return setAside();
+
+  /* Anything short of a valid plate counts as a misread here - including a
+     read that is not in plate format at all, like a letter among the digits.
+     This only applies once the booked plate has passed the same check. */
+  if(s === "mismatch" && exp && read && read !== exp &&
+     plateCheck(exp) === true && plateCheck(read) !== true) return setAside();
+
+  return s;
+}
+
+function handleResult(j, isLive, note){
   /* One cue per shot, always. Nothing that reaches this function may end
      in silence: a verdict plays its own cue, and everything else plays the
      response tone. In Live that matters most - the text does not change
      from poll to poll, so a screen reader stops re-announcing it, and
      without a tone a running session is indistinguishable from a dead one. */
+  /* A note says this verdict overturns an earlier one. Standard leads with it;
+     Minimalistic keeps Region A to the state and moves the note to Region B,
+     since the state word must always be what a braille line starts with. */
+  var lead = (note && !minimal()) ? note + " " : "";
+  var aside = (note && minimal()) ? note : "";
+
   if(!j.vehicle_detected){
     noCarStreak++;
-    setVerdict("No car detected","");
-    setDetail(j.detail || "Point the camera toward the car.");
+    setVerdict(lead + "No car detected","");
+    setDetail([aside, j.detail || "Point the camera toward the car."].filter(Boolean).join(" "));
     playCue("respond");
-    if(isLive) retune();
     return;
   }
-  noCarStreak = 0; if(isLive) retune();
+  noCarStreak = 0;
 
   if(mode === "open"){
     var parts = [];
@@ -1519,28 +1710,17 @@ function handleResult(j, isLive){
   if(j.state === "match"){
     latchMatch(j, fields, basis);
   } else if(j.state === "potential"){
-    setVerdict(minimal() ? minimalLine(j) : ("Potential match" + suffix), "potential");
-    setDetail([basis, orient, j.detail||""].filter(Boolean).join(" "));
+    setVerdict(minimal() ? minimalLine(j) : (lead + "Potential match" + suffix), "potential");
+    setDetail([aside, basis, orient, j.detail||""].filter(Boolean).join(" "));
     playCue("potential");
   } else if(j.state === "mismatch"){
-    setVerdict(minimal() ? minimalLine(j) : ("Mismatch" + suffix), "mismatch");
-    setDetail([basis, j.detail||""].filter(Boolean).join(" "));   // orientation omitted: not your car
+    setVerdict(minimal() ? minimalLine(j) : (lead + "Mismatch" + suffix), "mismatch");
+    setDetail([aside, basis, j.detail||""].filter(Boolean).join(" "));   // orientation omitted: not your car
     playCue("mismatch");
   } else {
-    setVerdict(minimal() ? minimalLine(j) : "Uncertain", "uncertain");
-    setDetail([basis, orient, j.detail||"Move closer and try again."].filter(Boolean).join(" "));
+    setVerdict(minimal() ? minimalLine(j) : (lead + "Uncertain"), "uncertain");
+    setDetail([aside, basis, orient, j.detail||"Move closer and try again."].filter(Boolean).join(" "));
     playCue("uncertain");
-  }
-}
-
-/* Adaptive backoff: stretch the interval while nothing is found. */
-function retune(){
-  if(!liveTimer) return;
-  var want = noCarStreak >= 6 ? MAX_MS : (noCarStreak >= 3 ? BASE_MS*2 : BASE_MS);
-  if(want !== retune.cur){
-    retune.cur = want;
-    clearInterval(liveTimer);
-    liveTimer = setInterval(function(){ runScan(true); }, want);
   }
 }
 
@@ -1677,7 +1857,7 @@ function guideStep(manual){
    if(!b64){ busy = false; return; }
 
    callClaude([{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
-              {type:"text",text:GUIDE_PROMPT}], 200, "claude-haiku-4-5-20251001", !manual)
+              {type:"text",text:GUIDE_PROMPT}], 200, M_HAIKU, !manual, "guide")
   .then(function(j){
     if(gen !== guideGen) return;   // superseded, or guidance has since ended
     busy = false; guideErrs = 0;
@@ -1746,14 +1926,16 @@ identifyBtn.addEventListener("click", function(){
 liveBtn.addEventListener("click", function(){
   if(phase === "guiding"){ endGuidance("Guidance stopped."); return; }
   if(phase === "ended"){ startGuidance(); return; }
-  if(liveTimer){ stopLive(); setStatus("Live stopped."); return; }
-  noCarStreak = 0; retune.cur = BASE_MS; errStreak = 0; lastErrText = "";
+  if(liveOn){ stopLive(); setStatus("Live stopped."); return; }
+  noCarStreak = 0; potStreak = 0; errStreak = 0; lastErrText = "";
+  liveOn = true;
   liveBtn.textContent = "Stop Live"; liveBtn.classList.add("on");
   identifyBtn.disabled = true;
   setStatus("Live running.");
   startCountdown();
+  /* Only the first shot is fired here. Every later one is lined up by the
+     shot before it as it finishes - see scheduleLive. */
   runScan(true);
-  liveTimer = setInterval(function(){ runScan(true); }, BASE_MS);
   sessionCap = setTimeout(function(){
     stopLive();
     /* No cue and no announcement: the five minutes were stated before you
@@ -1789,7 +1971,8 @@ function stopCountdown(){
 }
 
 function stopLive(){
-  if(liveTimer){ clearInterval(liveTimer); liveTimer = null; }
+  liveOn = false;
+  if(liveTimer){ clearTimeout(liveTimer); liveTimer = null; }
   if(sessionCap){ clearTimeout(sessionCap); sessionCap = null; }
   stopCountdown();
   if(phase !== "guiding" && phase !== "ended"){
