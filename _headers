@@ -1,0 +1,26 @@
+# Cloudflare Pages reads this file from the repo root.
+#
+# The service worker is network-first precisely so a deploy is picked up on the
+# next online load. That only holds if the network actually hands back the new
+# file - and a CDN is a second cache sitting in front of the one the service
+# worker manages. Without these two rules the stale-build problem the service
+# worker was written to solve reappears one layer up, where it is harder to see.
+#
+# no-cache does not mean "do not store". It means revalidate before serving, so
+# an unchanged file still comes back as a cheap 304 rather than a full download.
+
+/sw.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: no-cache
+
+# Icons are content-stable and change only when renamed, so they can be held.
+/icon-180.png
+  Cache-Control: public, max-age=604800
+
+/icon-512.png
+  Cache-Control: public, max-age=604800

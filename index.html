@@ -31,13 +31,22 @@
   .card{background:var(--card);border-radius:var(--radius);padding:18px;margin-bottom:16px}
   label{display:block;margin:14px 0 6px;font-weight:600}
   input[type=text],input[type=password],textarea,select{width:100%;padding:12px;font-size:1rem;
-    border-radius:10px;border:1px solid #33343a;background:#0e0f12;color:var(--text)}
+    border-radius:10px;border:2px solid #5a5d66;background:#0e0f12;color:var(--text)}
+  /* The field sat a shade darker than the card behind a near-invisible hairline,
+     so it read as a recess rather than a control. A 2px border at proper
+     contrast, and a lit border while editing, makes both its presence and its
+     state visible without relying on the caret. */
+  input[type=text]:focus,textarea:focus,select:focus{border-color:var(--accent);background:#141519}
+  .field-row{display:flex;gap:8px;align-items:stretch}
+  .field-row input{flex:1 1 auto;min-width:0}
+  button.ghost{background:#24262c;color:var(--text);border:2px solid #5a5d66;
+    padding:0 14px;min-height:48px;flex:0 0 auto;font-size:.95rem}
+  /* Masking is presentational only. The input stays a plain text field, so
+     granularity navigation, editing and deletion all behave normally. */
+  input.masked{-webkit-text-security:disc; text-security:disc}
   textarea{min-height:80px;resize:vertical}
   input[type=file]{width:100%;padding:10px 0;color:var(--text)}
   input[type=checkbox]{width:26px;height:26px;accent-color:var(--accent);flex:0 0 auto}
-  .fieldRow{display:flex;gap:8px;align-items:stretch}
-  .fieldRow input{flex:1}
-  .fieldRow button{width:auto;flex:0 0 auto;margin-top:0;min-height:0;padding:0 16px}
   button{font:inherit;border:none;border-radius:12px;padding:14px 18px;cursor:pointer}
   button.primary{background:var(--accent);color:#fff;width:100%;font-size:1.1rem;min-height:60px;margin-top:14px}
   button.secondary{background:#24262c;color:var(--text);width:100%;min-height:54px;margin-top:10px}
@@ -68,17 +77,8 @@
     padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
     background:#101115;border-top:1px solid #26282e;z-index:20}
   #actionBar button{flex:1;margin-top:0;min-height:66px;font-size:.82rem;padding:8px 6px;line-height:1.2}
-  /* Two fixed lines, so the bar never reflows when Live starts or stops.
-     A layout learned by touch should not move under the finger. */
-  #liveBtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-  #liveSub{font-size:.72rem;opacity:.85;font-variant-numeric:tabular-nums}
   #dialogBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:50;
     display:flex;align-items:center;justify-content:center;padding:20px}
-  #liveInfoBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:50;
-    display:flex;align-items:center;justify-content:center;padding:20px}
-  #liveInfoDialog{background:var(--card);border-radius:18px;padding:22px;max-width:460px;width:100%}
-  #liveInfoDialog button{width:100%;min-height:64px;margin-top:12px}
-  #liveInfoTitle{font-size:1.15rem;font-weight:700;margin:0 0 8px}
   #matchDialog{background:var(--card);border-radius:18px;padding:22px;max-width:460px;width:100%;
     border:2px solid var(--ok)}
   #dlgVerdict{font-size:1.35rem;font-weight:800;color:var(--ok);margin:0 0 8px}
@@ -113,17 +113,13 @@
     <p class="hint" id="settingsNote">Changes are saved when you go back.</p>
 
     <label for="apiKey">Access code</label>
-    <!-- enterkeyhint relabels the keyboard's return key as Done on iOS and
-         Android. Pressing it does not close the keyboard by itself, so the
-         Enter handler blurs the field, which is what actually dismisses it. -->
-    <div class="fieldRow">
-      <input type="password" id="apiKey" autocomplete="off" spellcheck="false"
-             autocapitalize="none" enterkeyhint="done"
-             placeholder="e.g. word-1234" aria-describedby="key-hint">
-      <button type="button" id="revealKey" class="secondary"
-              aria-pressed="false" aria-label="Show access code">Show</button>
+    <div class="field-row">
+      <input type="text" id="apiKey" class="masked" autocomplete="off" spellcheck="false"
+             autocapitalize="none" autocorrect="off" inputmode="text"
+             placeholder="Enter your access code">
+      <button type="button" id="maskBtn" class="ghost" aria-pressed="true">Show</button>
     </div>
-    <p class="hint" id="key-hint">This code is for Car Spotter only and will not work in Spotter. Your Anthropic key stays on the server; this code only unlocks it.</p>
+    <p class="hint">Given to you by the administrator.</p>
 
     <label for="modelSel">Model for confirming</label>
     <select id="modelSel">
@@ -162,7 +158,7 @@
       <summary id="whatsNewToggle">What's new</summary>
       <div id="changelog"></div>
     </details>
-    <p class="hint" id="versionLine">Car Spotter version 2.1.0</p>
+    <p class="hint" id="versionLine">Car Spotter version 2.4.0</p>
   </section>
 
   <!-- ================= MODE ================= -->
@@ -221,6 +217,12 @@
       <h3 id="detailsHeading" hidden>Details</h3>
       <div id="detailStatic"></div>
 
+      <!-- Plain text, deliberately not a live region. It updates every second
+           while Live runs, so it can be read on demand by touch or swipe
+           without announcing itself sixty times. -->
+      <p id="liveNote" class="hint">Live checks every few seconds and stops on its own after five minutes.</p>
+      <p id="liveLeft" hidden></p>
+
       <div id="status"></div>
     </div>
   </section>
@@ -228,20 +230,9 @@
   <div id="actionBar" hidden>
     <button id="startCam" class="secondary">Start camera</button>
     <button id="identifyBtn" class="secondary" disabled>Identify</button>
-    <button id="liveBtn" class="secondary" disabled aria-label="Start Live, 5 minute limit"><span id="liveMain">Start Live</span><span id="liveSub">5 minute limit</span></button>
+    <button id="liveBtn" class="secondary" disabled>Start Live</button>
   </div>
 </main>
-
-<!-- ============ FIRST-RUN LIVE NOTICE ============ -->
-<div id="liveInfoBackdrop" hidden>
-  <div id="liveInfoDialog" role="dialog" aria-modal="true"
-       aria-labelledby="liveInfoTitle" aria-describedby="liveInfoBody" tabindex="-1">
-    <p id="liveInfoTitle">About Live</p>
-    <p id="liveInfoBody">Live keeps checking on its own every few seconds, so you can hold the phone up and wait. It stops by itself after five minutes to save battery and cost. The Live button shows how long is left, and you can start it again any time.</p>
-    <button id="liveInfoGo" class="primary">Start Live</button>
-    <button id="liveInfoCancel" class="secondary">Not now</button>
-  </div>
-</div>
 
 <!-- ================= MATCH DIALOG ================= -->
 <div id="dialogBackdrop" hidden>
@@ -274,10 +265,18 @@ if("serviceWorker" in navigator){
    a code that its proxy will reject. */
 var NS = "carspotter.";
 var K = {key:NS+"accessCode", model:NS+"model", speak:NS+"speak", cam:NS+"cam",
-         style:NS+"style", sound:NS+"sound", seen:NS+"seenVersion",
-         liveSeen:NS+"liveNoticeSeen"};
+         style:NS+"style", sound:NS+"sound", seen:NS+"seenVersion"};
 var PROXY_URL = "https://car-spotter-proxy.chs1809.workers.dev";
 var MAX_TOKENS = 400;   // the Worker caps at 400; asking for more is silently clamped
+
+/* Capture widths. Image tokens scale with pixel count, so this is the single
+   biggest lever on what a scan costs: 1600 wide is about 2560 tokens, 1280 is
+   about 1640, 1024 is about 1050. 1280 is the middle setting - it keeps the
+   plate comfortably above the resolution where OCR starts guessing between 8
+   and B, while taking roughly a third off every verification. Guidance is
+   asking where a car is, not what it says, and 800 has always been enough. */
+var SHOT_W  = 1280;
+var GUIDE_W = 800;
 
 function sget(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
 function sset(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
@@ -474,6 +473,149 @@ CUES.guideFar = function(){ return renderCue([
 VIBES.guideNear = [40];
 VIBES.guideFar  = [50,40,50];
 
+/* =======================================================================
+   SHUTTER
+   Marks the moment of capture. Two to four seconds pass between the shot and
+   the spoken verdict, and without this the user has no idea which moment the
+   answer describes - which matters most when they are walking.
+
+   Deliberately not built from the bell voices above. Every other cue in this
+   app is a tuned instrument; this one is an object, so it is noise excited
+   through a bank of resonators rather than a note. That keeps it outside the
+   verdict family by construction: it can fire every four seconds for a whole
+   Live session without ever being mistaken for a judgement about the car.
+
+   The modes below are all between 1.1 and 4.4 kHz, which is the band a
+   centimetres-wide mechanism can actually produce. Lower modes make it sound
+   like a drum; letting low modes ring longer than high ones makes it sound
+   like a room. Solidity comes from seven closely-spaced modes, not from bass.
+   ======================================================================= */
+var SHUTTER_MODES = [[1150,4.0,0.55],[1480,4.5,0.78],[1850,5.0,0.95],
+                     [2250,5.0,1.00],[2800,5.0,0.70],[3500,5.0,0.336],
+                     [4400,5.0,0.144]];
+
+/* One-pole-per-stage biquads, run as sample loops because these render once
+   into a cached buffer and never again. */
+function bqRun(x, b0,b1,b2,a1,a2){
+  var y = new Float32Array(x.length), x1=0,x2=0,y1=0,y2=0, i, v, o;
+  for(i=0;i<x.length;i++){
+    v = x[i]; o = b0*v + b1*x1 + b2*x2 - a1*y1 - a2*y2;
+    x2=x1; x1=v; y2=y1; y1=o; y[i]=o;
+  }
+  return y;
+}
+function bqBand(x,f,Q){
+  var w=2*Math.PI*f/SRATE, al=Math.sin(w)/(2*Q), c=Math.cos(w), a0=1+al;
+  return bqRun(x, al/a0, 0, -al/a0, -2*c/a0, (1-al)/a0);
+}
+function bqLow(x,f){
+  var w=2*Math.PI*f/SRATE, al=Math.sin(w)/(2*0.707), c=Math.cos(w), a0=1+al, b=(1-c)/2;
+  return bqRun(x, b/a0, (1-c)/a0, b/a0, -2*c/a0, (1-al)/a0);
+}
+function bqHigh(x,f){
+  var w=2*Math.PI*f/SRATE, al=Math.sin(w)/(2*0.707), c=Math.cos(w), a0=1+al, b=(1+c)/2;
+  return bqRun(x, b/a0, -(1+c)/a0, b/a0, -2*c/a0, (1-al)/a0);
+}
+function hitEnv(n, atk, dec){
+  var e = new Float32Array(n), a = Math.max(1, Math.round(SRATE*atk)), i;
+  for(i=0;i<n;i++){
+    var t = i/SRATE;
+    e[i] = (i<a ? i/a : 1) * Math.exp(-t/dec);
+  }
+  return e;
+}
+function noiseArr(n, seed){
+  var r = rng(seed), a = new Float32Array(n), i;
+  for(i=0;i<n;i++) a[i] = r();
+  return a;
+}
+
+/* One blade event: a noise burst struck through the mode bank. */
+function bladeHit(dur, scale, qMul, dec, atk, seed, floor, top, knock){
+  var n = Math.round(SRATE*dur), out = new Float32Array(n), i, m, j;
+
+  /* One burst drives every mode. A single strike excites the whole assembly,
+     so this is what actually happens - and giving each mode its own random
+     draw makes the balance between them a lottery, since a narrow bandpass
+     catches a widely varying slice of any one noise realisation. Sharing the
+     excitation puts the balance back under the weights below, where it is
+     supposed to live. */
+  var src = noiseArr(n, seed), env = hitEnv(n, atk, dec);
+  for(j=0;j<n;j++) src[j] *= env[j];
+
+  for(m=0; m<SHUTTER_MODES.length; m++){
+    var f = SHUTTER_MODES[m][0]*scale, Q = SHUTTER_MODES[m][1]*qMul, g = SHUTTER_MODES[m][2];
+    var band = bqBand(src, f, Q);
+    for(j=0;j<n;j++) out[j] += band[j]*g;
+  }
+  if(knock){
+    /* A hint of the assembly seating. High enough to stay pocket-sized and
+       gone within about ten milliseconds. */
+    var kn = noiseArr(n, seed+9), ke = hitEnv(n, 0.0012, knock[2]), q;
+    for(q=0;q<n;q++) kn[q] *= ke[q];
+    var kb = bqBand(kn, knock[0], 2.0);
+    for(q=0;q<n;q++) out[q] += kb[q]*knock[1];
+  }
+  out = bqLow(bqHigh(out, floor), top);
+  return out;
+}
+
+/* The full gesture. The K and the lick are not equal partners: the K is
+   short, quiet and slightly higher, a latch releasing; the lick is the blade
+   itself, fuller and lower, carrying the tone. The rustle between them is the
+   blades travelling, and is the difference between a mechanism and a switch. */
+function renderShutter(o){
+  var c = ctx(), total = o.gap + o.tail;
+  var n = Math.round(c.sampleRate*total);
+  var buf = c.createBuffer(2, n, c.sampleRate);
+  var L = buf.getChannelData(0), R = buf.getChannelData(1);
+  var mix = new Float32Array(n), i;
+
+  function add(seg, at, amp){
+    var st = Math.round(SRATE*at);
+    for(var k=0;k<seg.length && st+k<n;k++) mix[st+k] += seg[k]*amp;
+  }
+
+  add(bladeHit(o.kDur, o.kRatio, 1.15, o.dec*o.kDec, 0.0006, o.seed,
+               o.floor*1.3, o.top, null), 0, o.kAmp);
+
+  var sn = Math.round(SRATE*Math.max(o.gap, 0.010));
+  var sw = bqLow(bqHigh(noiseArr(sn, o.seed+40), 2400), 5600);
+  for(i=0;i<sn;i++) sw[i] *= Math.pow(Math.sin(Math.PI*i/(sn-1||1)), 1.6);
+  add(sw, 0.002, o.sweep);
+
+  add(bladeHit(o.tail, o.ratio, 1.0, o.dec*1.25, 0.0010, o.seed+1,
+               o.floor, o.top, o.knock), o.gap, 1.0);
+
+  var mx = 0;
+  for(i=0;i<n;i++) if(Math.abs(mix[i])>mx) mx = Math.abs(mix[i]);
+  var tail = Math.min(Math.round(SRATE*0.012), n);
+  if(mx>0) for(i=0;i<n;i++) mix[i] = mix[i]/mx*o.peak;
+  for(i=0;i<tail;i++) mix[n-tail+i] *= (1+Math.cos(Math.PI*i/(tail-1||1)))/2;
+  for(i=0;i<n;i++){ L[i] = mix[i]; R[i] = mix[i]; }
+  return buf;
+}
+
+/* shutter      - the automatic poll, in Live and in guidance
+   shutterPress - a deliberate press. Weight comes from a wider gap, a lower
+     lick and a longer tail, never from being louder, because loudness is what
+     makes a repeated sound tiring. */
+CUES.shutter = function(){ return renderShutter({
+  gap:0.032, ratio:0.78, dec:0.0074, tail:0.115, kDur:0.030, kAmp:0.44,
+  kRatio:1.26, kDec:0.42, sweep:0.19, knock:[820,0.20,0.010],
+  floor:680, top:5800, seed:801, peak:0.50 }); };
+CUES.shutterPress = function(){ return renderShutter({
+  gap:0.036, ratio:0.72, dec:0.0088, tail:0.145, kDur:0.034, kAmp:0.50,
+  kRatio:1.26, kDec:0.42, sweep:0.22, knock:[760,0.26,0.013],
+  floor:680, top:5800, seed:801, peak:0.60 }); };
+VIBES.shutter      = [18];
+VIBES.shutterPress = [28];
+
+/* The convolver gives the bell cues their space. A shutter wants none of it:
+   reverb is a size cue, and putting a small object in a hall undoes the whole
+   point of keeping its modes above 1 kHz. */
+var DRY_ONLY = { shutter:1, shutterPress:1 };
+
 function playCue(name){
   /* Vibration comes first and is not gated by the sound setting. Someone who
      cannot hear the cues will have turned sound off, and they are exactly the
@@ -487,7 +629,8 @@ function playCue(name){
     var src = c.createBufferSource(); src.buffer = cueCache[name];
     var dry = c.createGain(), wet = c.createGain(), conv = c.createConvolver();
     conv.buffer = makeIR();
-    dry.gain.value = 0.74; wet.gain.value = 0.28;
+    dry.gain.value = DRY_ONLY[name] ? 1.0 : 0.74;
+    wet.gain.value = DRY_ONLY[name] ? 0.0 : 0.28;
     src.connect(dry).connect(c.destination);
     src.connect(conv).connect(wet).connect(c.destination);
     src.start();
@@ -525,6 +668,7 @@ function syncScanLabels(){
   var t = scanLabel();
   scanH.textContent = t;
   tagline.textContent = t;
+  liveNote.hidden = (phase === "guiding" || phase === "ended");
 }
 function setTagline(name){
   if(name === "mode"){
@@ -559,7 +703,7 @@ function show(name){
     saveKey.hidden = !firstRun;
     settingsNote.hidden = firstRun;
   }
-  if(name === "scan") scanH.textContent = scanLabel();
+  if(name === "scan"){ scanH.textContent = scanLabel(); liveNote.hidden = false; }
   setTagline(name);
   syncBack();
   var h = screens[name].querySelector("h2");
@@ -571,10 +715,9 @@ function show(name){
    ELEMENTS
    ======================================================================= */
 var $ = function(id){ return document.getElementById(id); };
-var apiKeyInput=$("apiKey"), modelSel=$("modelSel"), styleSel=$("styleSel"), styleHint=$("styleHint"),
+var apiKeyInput=$("apiKey"), maskBtn=$("maskBtn"), modelSel=$("modelSel"), styleSel=$("styleSel"), styleHint=$("styleHint"),
     lensSel=$("lensSel"), lensHint=$("lensHint"), detectLenses=$("detectLenses"),
-    liveMain=$("liveMain"), liveSub=$("liveSub"),
-    revealKey=$("revealKey"), ttsToggle=$("ttsToggle"), soundToggle=$("soundToggle"), testCues=$("testCues"),
+    ttsToggle=$("ttsToggle"), soundToggle=$("soundToggle"), testCues=$("testCues"),
     saveKey=$("saveKey"), settingsNote=$("settingsNote"),
     modeConfirmBtn=$("modeConfirm"), modeOpenBtn=$("modeOpen"),
     rideText=$("rideText"), rideShot=$("rideShot"), parseRide=$("parseRide"),
@@ -585,8 +728,7 @@ var apiKeyInput=$("apiKey"), modelSel=$("modelSel"), styleSel=$("styleSel"), sty
     verdictEl=$("verdict"), detailLive=$("detailLive"), detailStatic=$("detailStatic"),
     detailsHeading=$("detailsHeading"), statusEl=$("status"),
     tagline=$("tagline"), scanH=$("scan-h"),
-    liveInfoBackdrop=$("liveInfoBackdrop"), liveInfoDialog=$("liveInfoDialog"),
-    liveInfoGo=$("liveInfoGo"), liveInfoCancel=$("liveInfoCancel"),
+    liveNote=$("liveNote"), liveLeft=$("liveLeft"),
     whatsNew=$("whatsNew"), whatsNewToggle=$("whatsNewToggle"),
     changelog=$("changelog"), newsHint=$("newsHint"), versionLine=$("versionLine"),
     backdrop=$("dialogBackdrop"), dialog=$("matchDialog"), dlgVerdict=$("dlgVerdict"),
@@ -680,8 +822,27 @@ function loadSettings(){
    says what changed for them rather than what changed in the code - but
    it doubles as the record of what this build actually contains.
    ======================================================================= */
-var VERSION = "2.1.0";
+var VERSION = "2.4.0";
 var CHANGELOG = [
+ { v:"2.4.0", items:[
+   "A shutter sound now marks the moment each photo is taken, so you know which moment the spoken result is describing.",
+   "Pressing a button to check gives a slightly heavier shutter than automatic checking does.",
+   "A short vibration accompanies the shutter, so the moment of capture is there whether or not sound is on."
+ ]},
+ { v:"2.3.0", items:[
+   "Every check now takes three quick photos and keeps the sharpest one, so a shaky hand or a hunting focus no longer wastes a check.",
+   "The access code field can now be read and edited properly with a screen reader, including character by character.",
+   "The access code stays hidden, with a Show button next to the field when you want to check it.",
+   "Text fields are easier to see, and light up while you are typing in one.",
+   "Shorter, plainer wording under the access code field."
+ ]},
+ { v:"2.2.0", items:[
+   "A check that stalls now gives up after fifteen seconds and says so, instead of leaving the app silently stuck.",
+   "Photos are captured a little smaller. Plate reading is unchanged; each check costs about a third less to run.",
+   "When the service itself has a problem, the app now says so plainly rather than blaming your access code.",
+   "If automatic checking has to pause, the manual button keeps working. Press Identify, or Check now in guidance, whenever you need to.",
+   "Live and guidance stop straight away on a fault that will not fix itself, instead of retrying twice more first."
+ ]},
  { v:"2.1.0", items:[
    "The screen name now shows at the top of every screen, and headings no longer take up space visually.",
    "Your ride summary shows just the car, and reads as matched once a match is found.",
@@ -698,10 +859,7 @@ var CHANGELOG = [
    "Scan errors are now announced properly instead of appearing silently. Live stops rather than retrying into a rate limit.",
    "Every check now makes a sound, including when no car is found, so you can tell Live is still running. Open identification too.",
    "Server and connection problems have their own distinct sound.",
-   "The Live button now shows how long is left in the session, and reads the remaining time when you touch it.",
-   "A short explanation of Live appears the first time you use it.",
-   "The access code field has a Show and Hide button, and the keyboard's return key now says Done and closes the keyboard.",
-   "The access code example no longer uses a personal name, and the note now says the code is for Car Spotter only.",
+   "Live states up front that it stops after five minutes, and shows the time remaining while it runs.",
    "This What's new list."
  ]},
  { v:"2.0.0", items:[
@@ -789,6 +947,20 @@ function persistSettings(){
   sset(K.sound, soundToggle.checked ? "1" : "0");
 }
 
+/* The code is worth masking - it is currency under the shared-service model -
+   but a password input is the wrong way to get there. Android suppresses text
+   exposure in password fields, which is why the rotor read the hint instead of
+   the characters and why backspace would not bite. This masks in CSS over an
+   ordinary text field, so the screen reader sees real, navigable, editable
+   text and only the eye is denied it. */
+maskBtn.addEventListener("click", function(){
+  var masked = apiKeyInput.classList.toggle("masked");
+  maskBtn.setAttribute("aria-pressed", masked ? "true" : "false");
+  maskBtn.textContent = masked ? "Show" : "Hide";
+  setStatus(masked ? "Access code hidden." : "Access code showing.");
+  apiKeyInput.focus();
+});
+
 saveKey.addEventListener("click", function(){
   var c = apiKeyInput.value.trim();
   if(!c){ apiKeyInput.focus(); return; }
@@ -797,7 +969,6 @@ saveKey.addEventListener("click", function(){
 });
 
 function leaveSettings(){
-  hideKey();
   persistSettings();
   var dest = settingsReturn || "mode"; settingsReturn = null;
   show(dest);
@@ -828,36 +999,6 @@ headerBack.addEventListener("click", function(){
   }
   stopLive(); stopGuidance(); stopCamera(); show("mode");
 });
-
-/* A reveal control is genuinely two-state - shown or hidden - rather than
-   one action with two effects, so aria-pressed is right here even though it
-   would be wrong on the Live button. The label changes too, since some
-   screen readers report pressed state tersely or not at all. */
-revealKey.addEventListener("click", function(){
-  var shown = apiKey.type === "text";
-  var pos = apiKey.selectionStart, end = apiKey.selectionEnd;
-  apiKey.type = shown ? "password" : "text";
-  revealKey.textContent = shown ? "Show" : "Hide";
-  revealKey.setAttribute("aria-pressed", shown ? "false" : "true");
-  revealKey.setAttribute("aria-label", shown ? "Show access code" : "Hide access code");
-  /* Switching type drops focus in some browsers; put it back where it was so
-     the keyboard does not close mid-edit. */
-  try{ apiKey.focus(); if(pos !== null) apiKey.setSelectionRange(pos, end); }catch(e){}
-});
-
-/* Done on the keyboard fires Enter here. Blurring is the only thing a web
-   page can do that reliably makes iOS put the keyboard away. */
-apiKey.addEventListener("keydown", function(e){
-  if(e.key === "Enter"){ e.preventDefault(); apiKey.blur(); }
-});
-
-/* Never leave the code on screen after the field is done with. */
-function hideKey(){
-  apiKey.type = "password";
-  revealKey.textContent = "Show";
-  revealKey.setAttribute("aria-pressed","false");
-  revealKey.setAttribute("aria-label","Show access code");
-}
 
 testCues.addEventListener("click", function(){
   var seq = ["match","potential","uncertain","mismatch","respond","error"], i = 0;
@@ -948,36 +1089,74 @@ function fileToB64(f){
   });
 }
 
-function callClaude(blocks, maxTokens, modelOverride){
+/* A request that never settles is worse than one that fails, because the busy
+   guard stays raised and every later poll returns silently. That reads exactly
+   like the app idling, which is the one thing a scan must never look like. So
+   every call carries its own deadline and fails loudly when it passes. */
+var CALL_TIMEOUT_MS = 15000;
+
+function callClaude(blocks, maxTokens, modelOverride, isLive){
   var code = sget(K.key);
   if(!code) return Promise.reject(new Error("This needs an access code. Add one in Settings."));
   var model = modelOverride || sget(K.model) || "claude-sonnet-5";
-  return fetch(PROXY_URL + "/v1/messages", {
+
+  var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  var timedOut = false;
+  var timer = setTimeout(function(){
+    timedOut = true;
+    if(ctrl) ctrl.abort();
+  }, CALL_TIMEOUT_MS);
+  var clear = function(){ clearTimeout(timer); };
+
+  var opts = {
     method:"POST",
-    headers:{"content-type":"application/json", "x-passcode":code},
+    headers:{"content-type":"application/json", "x-passcode":code,
+             "x-scan-mode": isLive ? "live" : "manual"},
     body:JSON.stringify({model:model,
                          max_tokens:Math.min(maxTokens||300, MAX_TOKENS),
                          messages:[{role:"user",content:blocks}]})
-  }).then(function(res){
+  };
+  if(ctrl) opts.signal = ctrl.signal;
+
+  return fetch(PROXY_URL + "/v1/messages", opts).then(function(res){
     if(!res.ok){
-      return res.text().then(function(){
-        var m = "Something went wrong ("+res.status+").";
-        if(res.status===401) m = "Access code rejected. Check it in Settings.";
-        else if(res.status===429) m = "Too many requests. Wait a few minutes and try again.";
-        else if(res.status>=500) m = "The service is busy. Try again in a moment.";
-        throw new Error(m);
+      /* The server now says what actually went wrong and whose fault it is.
+         Reading its message beats guessing from the status, which is how an
+         empty account balance used to be reported as a bad access code. */
+      return res.text().then(function(t){
+        var m = "", kind = "";
+        try{
+          var j = JSON.parse(t);
+          if(j && j.error){ m = j.error.message || ""; kind = j.error.code || ""; }
+        }catch(e){ /* fall through to the status-based wording */ }
+        if(!m){
+          m = "Something went wrong ("+res.status+").";
+          if(res.status===401) m = "Access code rejected. Check it in Settings.";
+          else if(res.status===429) m = "Too many requests. Wait a few minutes and try again.";
+          else if(res.status>=500) m = "The service is busy. Try again in a moment.";
+        }
+        var err = new Error(m);
+        err.serverCode = kind;
+        err.status = res.status;
+        throw err;
       });
     }
     return res.json();
   }).then(function(d){
+    clear();
     var txt = "";
     (d.content||[]).forEach(function(b){ if(b.type==="text") txt += b.text; });
     try{ return JSON.parse(txt.replace(/```json/gi,"").replace(/```/g,"").trim()); }
     catch(e){ throw new Error("Could not read the response. Try again."); }
   }).catch(function(err){
+    clear();
     var e = err || new Error("Unknown error");
-    if(/Failed to fetch|NetworkError/i.test(e.message||""))
+    if(timedOut || (e.name === "AbortError")){
+      e = new Error("The check took too long. Try again.");
+      e.serverCode = "timeout";
+    } else if(/Failed to fetch|NetworkError/i.test(e.message||"")){
       e.message = "Could not reach the service. Check your connection.";
+    }
     throw e;
   });
 }
@@ -1085,6 +1264,83 @@ function capture(maxW){
 }
 
 /* =======================================================================
+   BURST CAPTURE
+   A sighted user watches the preview and presses when it looks settled.
+   Nobody here can do that, so the shot lands wherever the hand and the
+   autofocus happened to be. Instead of asking the user to hold still, take
+   several frames and keep the sharpest one. Only the winner is ever sent, so
+   this costs nothing in tokens - it spends a fifth of a second to avoid
+   spending a whole round trip on a frame that was never going to be readable.
+   ======================================================================= */
+var scoreCanvas = document.createElement("canvas");
+scoreCanvas.width = 200; scoreCanvas.height = 150;
+
+/* Sharpness as the variance of a Laplacian. The Laplacian is a second
+   derivative: it responds to how fast brightness changes change, which is
+   large at a real edge and near zero across a blur. A crisp frame therefore
+   produces a wide spread of responses and a high variance; a blurred one
+   produces responses clustered near zero and a low variance. Comparing
+   variance between frames of the same scene, seconds apart, is exactly the
+   case where this measure is reliable. */
+function sharpness(){
+  var g = scoreCanvas.getContext("2d", {willReadFrequently:true});
+  g.drawImage(canvas, 0, 0, scoreCanvas.width, scoreCanvas.height);
+  var w = scoreCanvas.width, h = scoreCanvas.height;
+  var d = g.getImageData(0,0,w,h).data;
+
+  /* Luma only. Colour tells us nothing about focus and costs three times the
+     arithmetic. */
+  var lum = new Float32Array(w*h);
+  for(var i=0, j=0; i<d.length; i+=4, j++)
+    lum[j] = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+
+  /* 4-neighbour Laplacian. Edges of the frame are skipped rather than padded;
+     a one-pixel border cannot change a variance over 29,000 samples. */
+  var sum = 0, sumSq = 0, n = 0;
+  for(var y=1; y<h-1; y++){
+    for(var x=1; x<w-1; x++){
+      var k = y*w + x;
+      var v = 4*lum[k] - lum[k-1] - lum[k+1] - lum[k-w] - lum[k+w];
+      sum += v; sumSq += v*v; n++;
+    }
+  }
+  var mean = sum/n;
+  return (sumSq/n) - (mean*mean);
+}
+
+/* Frames are spaced far enough apart to be genuinely different moments - a
+   hand tremor and an autofocus hunt both take a good fraction of a second -
+   and few enough that the delay stays under the threshold where the user
+   would start to wonder whether the button worked. */
+function captureBest(maxW, frames, gapMs){
+  frames = frames || 3; gapMs = gapMs || 110;
+  return new Promise(function(resolve){
+    var best = null, bestScore = -1, taken = 0;
+
+    function shot(){
+      var vw = video.videoWidth, vh = video.videoHeight;
+      if(!vw || !vh){ resolve(null); return; }
+      var scale = vw > maxW ? maxW/vw : 1;
+      canvas.width = Math.round(vw*scale); canvas.height = Math.round(vh*scale);
+      canvas.getContext("2d").drawImage(video,0,0,canvas.width,canvas.height);
+
+      var score = sharpness();
+      /* Only the leader is ever encoded to JPEG. Encoding all of them and
+         discarding the losers is the obvious version of this and roughly
+         triples the cost of the whole operation. */
+      if(score > bestScore){
+        bestScore = score;
+        best = canvas.toDataURL("image/jpeg",0.85).split(",")[1];
+      }
+      if(++taken >= frames){ lastSharpness = bestScore; resolve(best); return; }
+      setTimeout(shot, gapMs);
+    }
+    shot();
+  });
+}
+var lastSharpness = 0;
+
+/* =======================================================================
    PROMPTS
    ======================================================================= */
 function confirmPrompt(){
@@ -1142,26 +1398,38 @@ var GUIDE_PROMPT =
 function runScan(isLive, manual){
   if(phase === "guiding" || phase === "ended") return;
   if(busy && !manual) return;
-  var b64 = capture(1600);
-  if(!b64){ setStatus("Camera not ready yet."); return; }
   var gen = ++scanGen;
   busy = true;
   if(!isLive) identifyBtn.disabled = true;
   setStatus(isLive ? "Scanning..." : "Reading the car...");
 
-  var blocks = [{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
+  /* Fires as the burst starts, not when the winner is picked. The shutter
+     marks when the camera looked, which is the thing the verdict will be
+     describing a few seconds later. */
+  playCue(manual || !isLive ? "shutterPress" : "shutter");
+
+  captureBest(SHOT_W, 3).then(function(b64){
+   if(gen !== scanGen) return;
+   if(!b64){ busy = false; if(!isLive) identifyBtn.disabled = false;
+             setStatus("Camera not ready yet."); return; }
+
+   var blocks = [{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
                 {type:"text",text: mode==="confirm" ? confirmPrompt() : OPEN_PROMPT}];
 
-  callClaude(blocks, 400).then(function(j){
+  /* A manual press is manual even inside Live. It is billed and rate-limited as
+     a deliberate act, which is what keeps the manual button alive when the
+     automatic poll has been paused. */
+   callClaude(blocks, 400, null, isLive && !manual).then(function(j){
     if(gen !== scanGen) return;            // superseded; stay quiet
     busy = false; if(!isLive) identifyBtn.disabled = false;
     errStreak = 0; lastErrText = "";
     handleResult(j, isLive);
-  }).catch(function(e){
+   }).catch(function(e){
     if(gen !== scanGen) return;
     busy = false; if(!isLive) identifyBtn.disabled = false;
     setStatus("");
     reportScanError(e, isLive);
+   });
   });
 }
 
@@ -1170,13 +1438,35 @@ function runScan(isLive, manual){
    the same message is not repeated on every poll, and Live stops instead of
    polling into a wall. */
 function reportScanError(e, isLive){
-  var msg = "Scan failed. " + e.message;
+  var kind = e.serverCode || "";
+
+  /* The server distinguishes "your code is wrong" from "the service itself is
+     unwell" from "automatic checking has paused". They used to arrive as the
+     same 401 or 429 and get read out as the same sentence, which sent people
+     hunting through Settings for a fault that was never theirs. */
+  if(kind === "live_paused"){
+    playCue("error");
+    if(isLive) stopLive();
+    var pauseMsg = "Automatic checking has paused. Press Identify whenever you want to check.";
+    lastErrText = pauseMsg;
+    setVerdict(pauseMsg, "error");
+    return;
+  }
+
+  var msg = (kind === "service_key" || kind === "service_credit")
+    ? e.message                        // already written from the user's side
+    : "Scan failed. " + e.message;
   errStreak++;
   /* The tone fires on every failure even though the text dedupes. Text
      carries information and should not repeat; the tone carries the fact
      that a shot happened at all, and that is true every time. */
   playCue("error");
-  var stopNow = /Too many requests|Access code/i.test(e.message) || errStreak >= 3;
+
+  /* A service-side fault will not fix itself on the next frame, so Live stops
+     at once rather than burning three more shots to reach the same answer. */
+  var fatal = (kind === "bad_code" || kind === "service_key" ||
+               kind === "service_credit" || kind === "ceiling" || kind === "busy_code");
+  var stopNow = fatal || /Too many requests|Access code/i.test(e.message) || errStreak >= 3;
   if(isLive && stopNow){
     stopLive();
     lastErrText = msg;
@@ -1308,7 +1598,7 @@ function dismissDialog(){
   closeDialog();
   phase = "verify";
   clearMatch();
-  setLiveBtn("Start Live", "5 minute limit", "Start Live, 5 minute limit"); liveBtn.classList.remove("on");
+  liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
   identifyBtn.textContent = "Identify"; identifyBtn.disabled = !stream;
   setStatus("Ready to verify.");
   syncScanLabels(); syncBack();
@@ -1328,7 +1618,7 @@ function startGuidance(){
      never shifts under a finger exploring by touch. */
   editRideFromScan.hidden = true;
   identifyBtn.textContent = "Check now"; identifyBtn.disabled = !stream;
-  setLiveBtn("Stop guidance", "", "Stop guidance"); liveBtn.classList.add("on");
+  liveBtn.textContent = "Stop guidance"; liveBtn.classList.add("on");
   setVerdict("Guidance on", "match");
   setDetail("");
   setStatus("Guiding you to the car.");
@@ -1349,7 +1639,7 @@ function endGuidance(msg){
   guideGen++;                       // nothing still in flight may speak
   phase = "ended";
   identifyBtn.textContent = "Check now"; identifyBtn.disabled = !stream;
-  setLiveBtn("Start guidance again", "", "Start guidance again"); liveBtn.classList.remove("on");
+  liveBtn.textContent = "Start guidance again"; liveBtn.classList.remove("on");
   setVerdict((msg || "Guidance finished.") + (matchLine ? " " + matchLine : ""), "match");
   setStatus("");
   syncScanLabels(); syncBack();
@@ -1362,7 +1652,7 @@ function stopGuidance(){
   if(phase === "guiding" || phase === "ended"){
     phase = "verify";
     identifyBtn.textContent = "Identify";
-    setLiveBtn("Start Live", "5 minute limit", "Start Live, 5 minute limit"); liveBtn.classList.remove("on");
+    liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
     editRideFromScan.hidden = (mode !== "confirm");
   }
 }
@@ -1370,8 +1660,6 @@ function guideStep(manual){
   if(!manual && phase !== "guiding") return;
   if(!manual && Date.now() > guideEnds){ endGuidance("Guidance finished."); return; }
   if(busy && !manual) return;
-  var b64 = capture(800);          // guidance does not need plate resolution
-  if(!b64) return;
   var gen = ++guideGen;
   busy = true;
   /* A manual shot replaces the next scheduled poll rather than adding to it,
@@ -1379,8 +1667,17 @@ function guideStep(manual){
      button is pressed. */
   if(manual && phase === "guiding"){ guideSince = 0; restartGuideTimer(); }
 
-  callClaude([{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
-              {type:"text",text:GUIDE_PROMPT}], 200, "claude-haiku-4-5-20251001")
+  playCue(manual ? "shutterPress" : "shutter");
+
+  /* Two frames, not three. Guidance is a walking loop where latency is itself
+     the message, and orientation survives a little softness in a way a plate
+     does not. */
+  captureBest(GUIDE_W, 2, 90).then(function(b64){
+   if(gen !== guideGen) return;
+   if(!b64){ busy = false; return; }
+
+   callClaude([{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
+              {type:"text",text:GUIDE_PROMPT}], 200, "claude-haiku-4-5-20251001", !manual)
   .then(function(j){
     if(gen !== guideGen) return;   // superseded, or guidance has since ended
     busy = false; guideErrs = 0;
@@ -1413,14 +1710,25 @@ function guideStep(manual){
       setDetail(msg);
       if(!minimal()) speak(msg);
     }
-  }).catch(function(){
+  }).catch(function(e){
     if(gen !== guideGen) return;
     busy = false;
-    if(manual){ setVerdict("Could not check just now.", "error"); return; }
+    var kind = (e && e.serverCode) || "";
+    /* Automatic guidance stops, Check now keeps working. Someone mid-walk to a
+       car needs the button more than they needed the polling. */
+    if(kind === "live_paused"){
+      /* endGuidance already writes the verdict. Writing it again here would put
+         the same sentence through the live region twice. */
+      playCue("error");
+      endGuidance("Automatic guidance paused. Press Check now when you need it.");
+      return;
+    }
+    if(manual){ setVerdict((e && e.message) || "Could not check just now.", "error"); return; }
     if(++guideErrs >= 3){
       endGuidance("Guidance stopped. The scan keeps failing.");
       setVerdict("Guidance stopped. The scan keeps failing.", "error");
     }
+   });
   });
 }
 
@@ -1435,48 +1743,12 @@ identifyBtn.addEventListener("click", function(){
   runScan(false, true);
 });
 
-/* Shown once, ever. There is no "do not show again" box because showing it
-   once already means it never returns - a checkbox would be a control that
-   does nothing. The five-minute limit still lives on the button afterwards,
-   which is where it is needed. */
-var liveInfoFocus = null;
-function openLiveInfo(){
-  liveInfoFocus = document.activeElement;
-  liveInfoBackdrop.hidden = false;
-  setTimeout(function(){ liveInfoDialog.focus(); }, 40);
-  document.addEventListener("keydown", trapLiveInfo, true);
-}
-function closeLiveInfo(){
-  liveInfoBackdrop.hidden = true;
-  document.removeEventListener("keydown", trapLiveInfo, true);
-  if(liveInfoFocus && liveInfoFocus.focus) liveInfoFocus.focus();
-}
-function trapLiveInfo(e){
-  if(liveInfoBackdrop.hidden) return;
-  if(e.key === "Escape"){ e.preventDefault(); sset(K.liveSeen,"1"); closeLiveInfo(); return; }
-  if(e.key !== "Tab") return;
-  var f = [liveInfoGo, liveInfoCancel], i = f.indexOf(document.activeElement);
-  e.preventDefault();
-  f[(i + (e.shiftKey ? f.length-1 : 1) + f.length) % f.length].focus();
-}
-liveInfoGo.addEventListener("click", function(){
-  sset(K.liveSeen,"1"); closeLiveInfo(); beginLive();
-});
-liveInfoCancel.addEventListener("click", function(){
-  sset(K.liveSeen,"1"); closeLiveInfo();
-});
-
 liveBtn.addEventListener("click", function(){
   if(phase === "guiding"){ endGuidance("Guidance stopped."); return; }
   if(phase === "ended"){ startGuidance(); return; }
   if(liveTimer){ stopLive(); setStatus("Live stopped."); return; }
-  if(!sget(K.liveSeen)){ openLiveInfo(); return; }
-  beginLive();
-});
-
-function beginLive(){
   noCarStreak = 0; retune.cur = BASE_MS; errStreak = 0; lastErrText = "";
-  paintLive(SESSION_MS); liveBtn.classList.add("on");
+  liveBtn.textContent = "Stop Live"; liveBtn.classList.add("on");
   identifyBtn.disabled = true;
   setStatus("Live running.");
   startCountdown();
@@ -1489,23 +1761,7 @@ function beginLive(){
        says Start Live again. The ending is predicted, not reported. */
     setStatus("Live stopped after five minutes.");
   }, SESSION_MS);
-}
-
-/* The Live button is the only indicator of Live's state, so it carries the
-   countdown too. The visible sub-line ticks every second; the accessible
-   name is rebuilt alongside it, so touching the button reads the current
-   time and nothing is announced when you are not on it.
-
-   The name is not frozen while focused. Under explore by touch the page
-   never sees the touches, and lifting and re-touching re-reads whatever
-   the name says at that moment - a frozen name would hand back a stale
-   time on exactly the second read the user made deliberately. */
-function setLiveBtn(main, sub, name){
-  liveMain.textContent = main;
-  liveSub.textContent = sub || "";
-  liveSub.hidden = !sub;
-  liveBtn.setAttribute("aria-label", name || (sub ? main + ", " + sub : main));
-}
+});
 
 /* Reads as words rather than a clock face, since it is spoken as often as
    it is seen. */
@@ -1516,25 +1772,20 @@ function leftText(ms){
   if(m)      return m + (m>1?" minutes left":" minute left");
   return s + " seconds left";
 }
-function clockText(ms){
-  var t = Math.max(0, Math.round(ms/1000)), m = Math.floor(t/60), sec = t - m*60;
-  return m + ":" + (sec < 10 ? "0" : "") + sec;
-}
-function paintLive(ms){
-  setLiveBtn("Stop Live", clockText(ms) + " left", "Stop Live, " + leftText(ms));
-}
 function startCountdown(){
   liveEnds = Date.now() + SESSION_MS;
-  paintLive(SESSION_MS);
+  liveLeft.hidden = false;
+  liveLeft.textContent = leftText(SESSION_MS);
   if(liveTick) clearInterval(liveTick);
   liveTick = setInterval(function(){
     var ms = liveEnds - Date.now();
-    if(ms <= 0){ paintLive(0); return; }
-    paintLive(ms);
+    if(ms <= 0){ liveLeft.textContent = "Time is up."; return; }
+    liveLeft.textContent = leftText(ms);
   }, 1000);
 }
 function stopCountdown(){
   if(liveTick){ clearInterval(liveTick); liveTick = null; }
+  liveLeft.hidden = true; liveLeft.textContent = "";
 }
 
 function stopLive(){
@@ -1542,7 +1793,7 @@ function stopLive(){
   if(sessionCap){ clearTimeout(sessionCap); sessionCap = null; }
   stopCountdown();
   if(phase !== "guiding" && phase !== "ended"){
-    setLiveBtn("Start Live", "5 minute limit", "Start Live, 5 minute limit"); liveBtn.classList.remove("on");
+    liveBtn.textContent = "Start Live"; liveBtn.classList.remove("on");
     identifyBtn.disabled = !stream;
   }
 }
