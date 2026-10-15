@@ -1,4 +1,5 @@
-# Cloudflare Pages reads this file from the repo root.
+# Cloudflare reads this file from the site's root, for Workers static assets
+# as it did for Pages.
 #
 # The service worker is network-first precisely so a deploy is picked up on the
 # next online load. That only holds if the network actually hands back the new
@@ -10,6 +11,11 @@
 # an unchanged file still comes back as a cheap 304 rather than a full download.
 
 /sw.js
+  Cache-Control: no-cache
+
+# The bare root is the same page as /index.html, and it is the one phones
+# actually open - a home-screen shortcut starts at /. It needs its own rule.
+/
   Cache-Control: no-cache
 
 /index.html
